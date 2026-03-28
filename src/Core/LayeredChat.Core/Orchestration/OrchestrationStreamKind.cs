@@ -10,6 +10,10 @@ public enum OrchestrationStreamKind
     ForwardingToExternal,
     ExternalForwardCompleted,
     ModelRoundStarted,
+    /// <summary>
+    /// Emitted after a model round completes; <see cref="OrchestrationStreamEnvelope.Attributes"/> include round index and cumulative token totals when available.
+    /// </summary>
+    ModelRoundCompleted,
     AssistantTextDelta,
     ToolCallFinished,
     ToolExecutionStarted,

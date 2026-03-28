@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Core\LayeredChat.Core\LayeredChat.Core.csproj" />
+    <ProjectReference Include="..\..\src\Connectors\OpenAiCompatible\LayeredChat.Connectors.OpenAiCompatible\LayeredChat.Connectors.OpenAiCompatible.csproj" />
   </ItemGroup>
 
   <ItemGroup>

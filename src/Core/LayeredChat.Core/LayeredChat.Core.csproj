@@ -9,11 +9,8 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);1591</NoWarn>
     <PackageId>LayeredChat.Core</PackageId>
-    <Version>$(LayeredChatVersion)</Version>
-    <Authors>Boligsektor</Authors>
     <Description>Versioned orchestration layer for LLM tool loops: pluggable model connectors, tool host, data sources, and output capabilities.</Description>
     <PackageTags>llm;ai;orchestration;tools;chat</PackageTags>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <IsPackable>true</IsPackable>
   </PropertyGroup>
 

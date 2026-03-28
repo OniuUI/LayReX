@@ -1,0 +1,62 @@
+name: Publish NuGet
+
+on:
+  workflow_dispatch:
+    inputs:
+      package_version:
+        description: Semantic version to publish (e.g. 0.2.0). Must match release intent.
+        required: true
+        type: string
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Restore
+        run: dotnet restore LayeredChat.sln
+
+      - name: Build and test
+        run: dotnet test LayeredChat.sln -c Release --no-restore --verbosity normal
+
+      - name: Pack
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.package_version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          dotnet pack LayeredChat.sln -c Release --no-build -o "${GITHUB_WORKSPACE}/artifacts" \
+            -p:PackageVersion="${VERSION}" -p:Version="${VERSION}"
+
+      - name: Push packages to NuGet.org
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${NUGET_API_KEY}" ]; then
+            echo "NUGET_API_KEY is not set. Add it under Repository secrets."
+            exit 1
+          fi
+          shopt -s nullglob
+          for f in "${GITHUB_WORKSPACE}"/artifacts/*.nupkg; do
+            dotnet nuget push "$f" --api-key "${NUGET_API_KEY}" --source https://api.nuget.org/v3/index.json --skip-duplicate
+          done
+          for f in "${GITHUB_WORKSPACE}"/artifacts/*.snupkg; do
+            dotnet nuget push "$f" --api-key "${NUGET_API_KEY}" --source https://api.nuget.org/v3/index.json --skip-duplicate
+          done

@@ -11,9 +11,10 @@
 [![.NET](https://img.shields.io/badge/.NET-9.0-512BD4?logo=dotnet)](https://dotnet.microsoft.com/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](#license)
 [![GitHub](https://img.shields.io/badge/GitHub-OniuUI%2FLayReX-181717?logo=github)](https://github.com/OniuUI/LayReX)
+[![NuGet LayeredChat.Core](https://img.shields.io/nuget/v/LayeredChat.Core?label=NuGet&logo=nuget)](https://www.nuget.org/packages/LayeredChat.Core)
 [![Contributions](https://img.shields.io/badge/contributions-welcome-brightgreen.svg)](#contributing)
 
-[Architecture](docs/ARCHITECTURE.md)
+[Architecture](docs/ARCHITECTURE.md) · [Telemetry & billing](docs/TELEMETRY_AND_BILLING.md) · [Connectors matrix](docs/CONNECTORS.md)
 
 </div>
 
@@ -42,6 +43,19 @@
 | `LayeredChat.Data.MongoDb` | Mongo `find` slice + `mongodb_find_json` tool |
 | `LayeredChat.Data.Qdrant` | Vector search slice |
 | `LayeredChat.Integrations.Mcp` | Model Context Protocol tools → `IToolCatalog` / `IToolExecutor` (official [ModelContextProtocol](https://www.nuget.org/packages/ModelContextProtocol) SDK) |
+
+### Install from NuGet
+
+Packages are published under the `LayeredChat.*` IDs on [nuget.org](https://www.nuget.org/packages?q=LayeredChat). Typical app references:
+
+```bash
+dotnet add package LayeredChat.Core
+dotnet add package LayeredChat.Connectors.OpenAiCompatible
+```
+
+Add connectors, data providers, or MCP as needed (`LayeredChat.Connectors.ExtensionsAi`, `LayeredChat.Data.PostgreSql`, `LayeredChat.Integrations.Mcp`, …).
+
+**Publish (maintainers):** In the LayReX GitHub repo, add a secret `NUGET_API_KEY` (API key from [nuget.org account API keys](https://www.nuget.org/account/apikeys), scope *Push* for `LayeredChat.*`). Then either push a git tag `v0.2.0`, or run the **Publish NuGet** workflow manually and enter the same version string (without `v`).
 
 **Solution:** `LayeredChat.sln` in this folder.
 
@@ -155,9 +169,11 @@ var executor = McpOrchestrationWiring.RoutePrefixedMcpThenHost("fs_", mcp.Execut
 
 4. Use **`CompositeToolCatalog`** and **`RoutedToolExecutor`** in Core for other merge / routing patterns.
 
+Multi-tenant hosts can implement **`IMcpToolSessionFactory`** (`LayeredChat.Integrations.Mcp`) to create or pool `McpToolSession` instances per scope key (tenant, user, etc.).
+
 ## Connectors & LLM versioning
 
-- **OpenAI-compatible HTTP** — one client for OpenAI, Azure OpenAI, Ollama, vLLM, etc. Per-request model: `LlmRequestOptions.ModelNameOverride`.
+- **OpenAI-compatible HTTP** — one client for OpenAI, Azure OpenAI, Ollama, vLLM, LiteLLM gateways, etc. Per-request model: `LlmRequestOptions.ModelNameOverride`. See [docs/CONNECTORS.md](docs/CONNECTORS.md) and **`OpenAiCompatibleWellKnownEndpoints`** for common base URLs.
 - **Microsoft.Extensions.AI** — reuse your existing `IChatClient` registration; tools use declaration-only `AIFunctionFactory.CreateDeclaration`.
 - **Manifest hints** — `LlmAdapterProfileId`, `PreferredConnectorKind`; runtime merge via `LayeredChatTurnRequest.ModelAdapterProfile` (`LlmModelAdapterProfile`).
 
@@ -181,7 +197,7 @@ var executor = McpOrchestrationWiring.RoutePrefixedMcpThenHost("fs_", mcp.Execut
 
 ## Observability
 
-- `IOrchestrationTelemetry` on `LayeredChatTurnRequest.Hooks` — fan out with `ChainedOrchestrationTelemetry`.
+- `IOrchestrationTelemetry` on `LayeredChatTurnRequest.Hooks` — fan out with `ChainedOrchestrationTelemetry`. See [docs/TELEMETRY_AND_BILLING.md](docs/TELEMETRY_AND_BILLING.md) for `UsageUpdate`, `ModelRoundCompleted`, and turn totals.
 - Propagate **`OrchestrationSessionContext.CorrelationId`** end-to-end.
 
 ---

@@ -173,4 +173,134 @@ public sealed class OrchestratorTests
         Assert.Single(executor.Invocations);
         Assert.Equal(2, connector.Calls);
     }
+
+    private sealed class ToolCountCapturingConnector : ILlmChatConnector
+    {
+        public string ConnectorKind => "ToolCount";
+
+        public List<int> ToolCountsPerCall { get; } = new();
+
+        public int Phase { get; set; }
+
+        public Task<LlmCompletionResult> CompleteAsync(
+            IReadOnlyList<ChatMessage> messages,
+            IReadOnlyList<ToolDefinition> tools,
+            LlmRequestOptions options,
+            CancellationToken cancellationToken = default)
+        {
+            ToolCountsPerCall.Add(tools.Count);
+            Phase++;
+            if (Phase == 1)
+            {
+                return Task.FromResult(new LlmCompletionResult
+                {
+                    ToolCalls = new[]
+                    {
+                        new ToolCallRequest { CallId = "1", Name = "a", ArgumentsJson = "{}" }
+                    }
+                });
+            }
+
+            return Task.FromResult(new LlmCompletionResult { TextContent = "ok" });
+        }
+    }
+
+    private sealed class NarrowRoundZeroProvider : IToolRoundCatalogProvider
+    {
+        public IReadOnlyList<string>? GetActiveToolNamesForRound(
+            int roundIndex,
+            IReadOnlyList<ChatMessage> workingMessages,
+            OrchestrationProfileManifest manifest) =>
+            roundIndex == 0 ? new[] { "a" } : null;
+    }
+
+    [Fact]
+    public async Task ToolRoundCatalogProvider_narrows_tools_on_first_round_only()
+    {
+        var manifest = new OrchestrationProfileManifest
+        {
+            OrchestrationId = "demo",
+            SemanticVersion = "1.0.0",
+            DisplayName = "Demo",
+            AllowedToolNames = new[] { "a", "b" },
+            DataSourceIdsInOrder = Array.Empty<string>()
+        };
+
+        var definitions = new InMemoryOrchestrationDefinitionRegistry();
+        definitions.Register(new OrchestrationDefinition { Manifest = manifest });
+
+        var connector = new ToolCountCapturingConnector();
+        var toolA = new ToolDefinition
+        {
+            Name = "a",
+            Description = "A",
+            ParametersSchemaJson = "{}"
+        };
+        var toolB = new ToolDefinition
+        {
+            Name = "b",
+            Description = "B",
+            ParametersSchemaJson = "{}"
+        };
+
+        var tools = new DictionaryToolCatalog(new[] { toolA, toolB });
+        var executor = new EchoToolExecutor();
+        var dataSources = new DataSourceRegistry(Array.Empty<IDataSourceProvider>());
+        var orchestrator = new LayeredChatOrchestrator(connector, executor, tools, definitions, dataSources);
+
+        await orchestrator.RunTurnAsync(new LayeredChatTurnRequest
+        {
+            OrchestrationRegistryKey = OrchestrationRegistryKeys.Compose("demo", "1.0.0"),
+            SystemInstructionText = "Use tools.",
+            UserMessageContent = "Go",
+            PriorMessages = Array.Empty<ChatMessage>(),
+            Hooks = new OrchestrationExecutionHooks { ToolRoundCatalogProvider = new NarrowRoundZeroProvider() }
+        });
+
+        Assert.Equal(2, connector.ToolCountsPerCall.Count);
+        Assert.Equal(1, connector.ToolCountsPerCall[0]);
+        Assert.Equal(2, connector.ToolCountsPerCall[1]);
+    }
+
+    [Fact]
+    public async Task ToolRoundCatalogProvider_rejects_name_outside_manifest()
+    {
+        var manifest = new OrchestrationProfileManifest
+        {
+            OrchestrationId = "demo",
+            SemanticVersion = "1.0.0",
+            DisplayName = "Demo",
+            AllowedToolNames = new[] { "a" },
+            DataSourceIdsInOrder = Array.Empty<string>()
+        };
+
+        var definitions = new InMemoryOrchestrationDefinitionRegistry();
+        definitions.Register(new OrchestrationDefinition { Manifest = manifest });
+
+        var badProvider = new BadProvider();
+        var orchestrator = new LayeredChatOrchestrator(
+            new RecordingConnector(),
+            new EchoToolExecutor(),
+            new DictionaryToolCatalog(Array.Empty<ToolDefinition>()),
+            definitions,
+            new DataSourceRegistry(Array.Empty<IDataSourceProvider>()));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => orchestrator.RunTurnAsync(new LayeredChatTurnRequest
+        {
+            OrchestrationRegistryKey = OrchestrationRegistryKeys.Compose("demo", "1.0.0"),
+            SystemInstructionText = "Hi",
+            UserMessageContent = "Go",
+            PriorMessages = Array.Empty<ChatMessage>(),
+            Hooks = new OrchestrationExecutionHooks { ToolRoundCatalogProvider = badProvider }
+        }));
+    }
+
+    private sealed class BadProvider : IToolRoundCatalogProvider
+    {
+        public IReadOnlyList<string>? GetActiveToolNamesForRound(
+            int roundIndex,
+            IReadOnlyList<ChatMessage> workingMessages,
+            OrchestrationProfileManifest manifest) =>
+            new[] { "nope" };
+    }
 }

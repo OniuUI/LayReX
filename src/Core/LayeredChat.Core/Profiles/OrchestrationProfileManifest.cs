@@ -14,6 +14,9 @@ public sealed class OrchestrationProfileManifest
 
     public string? SemanticVersion { get; init; }
 
+    /// <summary>Optional explicit profile SemVer for host configuration; registry keys still use <see cref="SemanticVersion"/>.</summary>
+    public string? ProfileVersion { get; init; }
+
     public string DisplayName { get; init; } = string.Empty;
 
     public string? Description { get; init; }

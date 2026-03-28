@@ -38,6 +38,11 @@ public sealed class LayeredChatHost
         await foreach (var envelope in Orchestrator.RunTurnStreamingAsync(request, cancellationToken)
                            .ConfigureAwait(false))
         {
+            if (request.Hooks?.Telemetry is { } telemetry)
+            {
+                await telemetry.EmitAsync(envelope, cancellationToken).ConfigureAwait(false);
+            }
+
             yield return envelope;
         }
     }

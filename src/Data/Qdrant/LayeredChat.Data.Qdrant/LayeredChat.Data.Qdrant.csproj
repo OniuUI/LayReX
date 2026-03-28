@@ -7,10 +7,8 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);1591</NoWarn>
     <PackageId>LayeredChat.Data.Qdrant</PackageId>
-    <Version>$(LayeredChatVersion)</Version>
     <Description>Qdrant vector search context slices for LayeredChat.</Description>
     <PackageTags>llm;qdrant;vector;layeredchat</PackageTags>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <IsPackable>true</IsPackable>
   </PropertyGroup>
 

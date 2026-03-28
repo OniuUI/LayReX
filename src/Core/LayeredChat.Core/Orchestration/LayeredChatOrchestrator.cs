@@ -103,6 +103,7 @@ public sealed class LayeredChatOrchestrator
         for (var i = 0; i < maxIterations; i++)
         {
             var options = BuildConnectorOptions(request, manifest);
+            var (roundTools, roundAllowed) = ResolveToolsForModelRound(i, prep, request);
             await EmitAsync(telemetry, new OrchestrationStreamEnvelope
             {
                 Kind = OrchestrationStreamKind.ModelRoundStarted,
@@ -118,7 +119,7 @@ public sealed class LayeredChatOrchestrator
             }, cancellationToken).ConfigureAwait(false);
 
             var completion = await _connector
-                .CompleteAsync(prep.Working, prep.Tools, options, cancellationToken)
+                .CompleteAsync(prep.Working, roundTools, options, cancellationToken)
                 .ConfigureAwait(false);
 
             totalIn += completion.InputTokens;
@@ -132,6 +133,22 @@ public sealed class LayeredChatOrchestrator
                 RegistryKey = request.OrchestrationRegistryKey,
                 InputTokens = completion.InputTokens,
                 OutputTokens = completion.OutputTokens
+            }, cancellationToken).ConfigureAwait(false);
+
+            await EmitAsync(telemetry, new OrchestrationStreamEnvelope
+            {
+                Kind = OrchestrationStreamKind.ModelRoundCompleted,
+                Sequence = ++seq,
+                CorrelationId = session.CorrelationId,
+                RegistryKey = request.OrchestrationRegistryKey,
+                OrchestrationId = manifest.OrchestrationId,
+                SemanticVersion = manifest.SemanticVersion,
+                Attributes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["round"] = i.ToString(),
+                    ["cumulativeInputTokens"] = totalIn.ToString(),
+                    ["cumulativeOutputTokens"] = totalOut.ToString()
+                }
             }, cancellationToken).ConfigureAwait(false);
 
             if (completion.ToolCalls.Count > 0)
@@ -177,7 +194,7 @@ public sealed class LayeredChatOrchestrator
                         ToolName = call.Name
                     }, cancellationToken).ConfigureAwait(false);
 
-                    var exec = await ExecuteToolAsync(call, prep.AllowedSet, request.OrchestrationRegistryKey, session, cancellationToken)
+                    var exec = await ExecuteToolAsync(call, roundAllowed, request.OrchestrationRegistryKey, session, cancellationToken)
                         .ConfigureAwait(false);
 
                     await EmitAsync(telemetry, new OrchestrationStreamEnvelope
@@ -309,6 +326,7 @@ public sealed class LayeredChatOrchestrator
         for (var round = 0; round < maxIterations; round++)
         {
             var options = BuildConnectorOptions(request, manifest);
+            var (roundTools, roundAllowed) = ResolveToolsForModelRound(round, prep, request);
             yield return Envelope(++seq, OrchestrationStreamKind.ModelRoundStarted, session, request, manifest,
                 new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["round"] = round.ToString() });
 
@@ -318,7 +336,7 @@ public sealed class LayeredChatOrchestrator
             {
                 var acc = new LlmStreamAccumulatorSession();
                 await foreach (var frame in streaming
-                                   .CompleteStreamingAsync(prep.Working, prep.Tools, options, cancellationToken)
+                                   .CompleteStreamingAsync(prep.Working, roundTools, options, cancellationToken)
                                    .ConfigureAwait(false))
                 {
                     acc.Accept(frame);
@@ -355,7 +373,7 @@ public sealed class LayeredChatOrchestrator
             else
             {
                 completion = await _connector
-                    .CompleteAsync(prep.Working, prep.Tools, options, cancellationToken)
+                    .CompleteAsync(prep.Working, roundTools, options, cancellationToken)
                     .ConfigureAwait(false);
                 if (!string.IsNullOrEmpty(completion.TextContent))
                 {
@@ -383,6 +401,22 @@ public sealed class LayeredChatOrchestrator
                 RegistryKey = request.OrchestrationRegistryKey,
                 InputTokens = completion.InputTokens,
                 OutputTokens = completion.OutputTokens
+            };
+
+            yield return new OrchestrationStreamEnvelope
+            {
+                Kind = OrchestrationStreamKind.ModelRoundCompleted,
+                Sequence = ++seq,
+                CorrelationId = session.CorrelationId,
+                RegistryKey = request.OrchestrationRegistryKey,
+                OrchestrationId = manifest.OrchestrationId,
+                SemanticVersion = manifest.SemanticVersion,
+                Attributes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["round"] = round.ToString(),
+                    ["cumulativeInputTokens"] = totalIn.ToString(),
+                    ["cumulativeOutputTokens"] = totalOut.ToString()
+                }
             };
 
             if (completion.ToolCalls.Count > 0)
@@ -428,7 +462,7 @@ public sealed class LayeredChatOrchestrator
                         ToolName = call.Name
                     };
 
-                    var exec = await ExecuteToolAsync(call, prep.AllowedSet, request.OrchestrationRegistryKey, session, cancellationToken)
+                    var exec = await ExecuteToolAsync(call, roundAllowed, request.OrchestrationRegistryKey, session, cancellationToken)
                         .ConfigureAwait(false);
 
                     yield return new OrchestrationStreamEnvelope
@@ -617,6 +651,40 @@ public sealed class LayeredChatOrchestrator
         return await forwarder
             .TryForwardTurnAsync(request, manifest, endpoint, timeout, cancellationToken)
             .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Resolves tool definitions and the allow-set for tool execution for one model round.
+    /// </summary>
+    private (IReadOnlyList<ToolDefinition> Tools, HashSet<string> AllowedSet) ResolveToolsForModelRound(
+        int roundIndex,
+        TurnPreparation prep,
+        LayeredChatTurnRequest request)
+    {
+        var manifest = prep.Manifest;
+        IReadOnlyList<string> names = manifest.AllowedToolNames;
+        var provider = request.Hooks?.ToolRoundCatalogProvider;
+        if (provider is not null)
+        {
+            var custom = provider.GetActiveToolNamesForRound(roundIndex, prep.Working, manifest);
+            if (custom is { Count: > 0 })
+            {
+                var allowedSuperset = new HashSet<string>(manifest.AllowedToolNames, StringComparer.Ordinal);
+                foreach (var n in custom)
+                {
+                    if (!allowedSuperset.Contains(n))
+                    {
+                        throw new InvalidOperationException(
+                            $"Tool round catalog returned '{n}' which is not in the manifest allow-list for orchestration '{manifest.OrchestrationId}'.");
+                    }
+                }
+
+                names = custom;
+            }
+        }
+
+        var tools = _toolCatalog.ResolveAllowed(names);
+        return (tools, new HashSet<string>(names, StringComparer.Ordinal));
     }
 
     private async Task<TurnPreparation> PrepareTurnAsync(LayeredChatTurnRequest request, CancellationToken cancellationToken)

@@ -7,10 +7,8 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);1591</NoWarn>
     <PackageId>LayeredChat.Connectors.OpenAiCompatible</PackageId>
-    <Version>$(LayeredChatVersion)</Version>
     <Description>OpenAI-compatible HTTP connector (sync + SSE streaming) for LayeredChat.Core.</Description>
     <PackageTags>llm;openai;ollama;layeredchat</PackageTags>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <IsPackable>true</IsPackable>
   </PropertyGroup>
 

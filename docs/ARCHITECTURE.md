@@ -26,6 +26,8 @@ Recommended entry type: **`LayeredChatHost`** via **`LayeredChatHost.CreateBuild
 
 Manifest **allow-lists** tool names; the orchestrator never executes a tool not in that set.
 
+Optional **`IToolRoundCatalogProvider`** (on `OrchestrationExecutionHooks`) may supply a **subset** of those names per model round so hosts can narrow or expand tools without a second HTTP stack.
+
 ## Packages
 
 | Package | Responsibility |
@@ -58,6 +60,11 @@ Sources are grouped by concern (public namespace remains `LayeredChat`):
 
 Manifest fields `ExternalForwardUri` / `ExternalForwardTimeoutSeconds` plus `IHttpOrchestrationForwarder` allow forwarding a turn to another deployment (e.g. container pinned to a semantic version). The **VersionHost** sample implements the receive side.
 
+## Telemetry and LLM connectors
+
+- **`IOrchestrationTelemetry`** receives `OrchestrationStreamEnvelope` for the full turn (same shapes as streaming). See [TELEMETRY_AND_BILLING.md](TELEMETRY_AND_BILLING.md) for token semantics (`UsageUpdate`, `ModelRoundCompleted`, `TurnResultSummary`).
+- **Choosing a model backend:** see [CONNECTORS.md](CONNECTORS.md) for the OpenAI-compatible-first matrix, gateways (LiteLLM), and when to add native connector packages.
+
 ## Security notes
 
 - Manifests must not be treated as an authorization layer; enforce tenant and tool policy in the host.
@@ -81,4 +88,7 @@ docker build -f deploy/version-pod/Dockerfile -t layered-chat-version-host:lates
 ## References
 
 - [README](../README.md) — quick start, MCP wiring, package list
+- [TELEMETRY_AND_BILLING.md](TELEMETRY_AND_BILLING.md) — observability and billing hooks
+- [CONNECTORS.md](CONNECTORS.md) — provider matrix and self-hosting
+- [SAMPLES.md](SAMPLES.md) — short recipes (telemetry, MCP, tools per round)
 - [Model Context Protocol C# SDK](https://github.com/modelcontextprotocol/csharp-sdk)

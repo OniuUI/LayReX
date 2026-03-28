@@ -7,10 +7,8 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);1591</NoWarn>
     <PackageId>LayeredChat.Data.PostgreSql</PackageId>
-    <Version>$(LayeredChatVersion)</Version>
     <Description>PostgreSQL tabular context slices and optional readonly SQL tool for LayeredChat.</Description>
     <PackageTags>llm;postgresql;layeredchat</PackageTags>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <IsPackable>true</IsPackable>
   </PropertyGroup>
 
