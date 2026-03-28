@@ -22,6 +22,8 @@ Host application
     → LayeredChatOrchestrator
 ```
 
+Recommended entry type: **`LayeredChatHost`** via **`LayeredChatHost.CreateBuilder()`** — one object to inject instead of wiring the orchestrator constructor by hand.
+
 Manifest **allow-lists** tool names; the orchestrator never executes a tool not in that set.
 
 ## Packages

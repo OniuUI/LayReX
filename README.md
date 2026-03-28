@@ -51,7 +51,28 @@
 
 ---
 
-## Quick start
+## Easiest API: `LayeredChatHost`
+
+Instead of new `LayeredChatOrchestrator(...)` with five dependencies, build a **single host object**:
+
+```csharp
+var host = LayeredChatHost.CreateBuilder()
+    .UseConnector(myConnector)                    // ILlmChatConnector (required)
+    .UseDefinitions(orchestrationDefinition)      // or .UseDefinitionRegistry(myRegistry)
+    .UseTools(myToolCatalog, myToolExecutor)      // optional; defaults to no tools
+    .UseDataSources(myDataSourceRegistry)        // optional; defaults to empty
+    .Build();
+
+var result = await host.RunTurnAsync(new LayeredChatTurnRequest { /* ... */ });
+// host.Orchestrator — same instance if you need the raw type
+// host.CreateAgent(registryKey) — IChatAgent for fixed-profile turns
+```
+
+For **dependency injection**, register one factory that returns `LayeredChatHost` (or register `LayeredChatOrchestrator` resolved from `sp.GetRequiredService<LayeredChatHost>().Orchestrator`). Decline-all tools: `NoOpToolExecutor.Instance` with an empty `DictionaryToolCatalog`.
+
+---
+
+## Quick start (manual wiring)
 
 1. Define a **manifest** (JSON) or `OrchestrationProfileManifest` in code.  
 2. **Register** with `InMemoryOrchestrationDefinitionRegistry` or your own `IOrchestrationDefinitionRegistry`.  

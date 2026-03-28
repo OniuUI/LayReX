@@ -30,7 +30,7 @@ var apiKey = builder.Configuration["OPENAI_API_KEY"] ?? Environment.GetEnvironme
 builder.Services.AddSingleton(registry);
 builder.Services.AddSingleton<IDataSourceRegistry>(_ => new DataSourceRegistry(Array.Empty<IDataSourceProvider>()));
 builder.Services.AddSingleton<IToolCatalog>(_ => new DictionaryToolCatalog(Array.Empty<ToolDefinition>()));
-builder.Services.AddSingleton<IToolExecutor, NoopToolExecutor>();
+builder.Services.AddSingleton<IToolExecutor>(_ => NoOpToolExecutor.Instance);
 builder.Services.AddHttpClient("openai", client => { client.Timeout = TimeSpan.FromMinutes(10); });
 builder.Services.AddSingleton(sp =>
 {
@@ -79,19 +79,3 @@ app.MapPost("/v1/orchestration/forward", async (
 app.MapGet("/health", () => Results.Ok(new { status = "ok", registryKey = definition.RegistryKey }));
 
 app.Run();
-
-internal sealed class NoopToolExecutor : IToolExecutor
-{
-    public Task<ToolExecutionResult> ExecuteAsync(
-        string toolName,
-        string argumentsJson,
-        OrchestrationSessionContext session,
-        CancellationToken cancellationToken = default)
-    {
-        return Task.FromResult(new ToolExecutionResult
-        {
-            Success = false,
-            SummaryText = $"Tool '{toolName}' is not configured on this version host."
-        });
-    }
-}
