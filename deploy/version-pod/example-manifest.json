@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "orchestrationId": "version-host-demo",
+  "semanticVersion": "1.0.0",
+  "displayName": "Version host demo",
+  "allowedToolNames": [],
+  "dataSourceIdsInOrder": [],
+  "maxToolIterations": 4,
+  "defaultTemperature": 0.3
+}

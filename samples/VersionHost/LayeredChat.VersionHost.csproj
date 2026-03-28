@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>LayeredChat.VersionHost</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Core\LayeredChat.Core\LayeredChat.Core.csproj" />
+    <ProjectReference Include="..\..\src\Connectors\OpenAiCompatible\LayeredChat.Connectors.OpenAiCompatible\LayeredChat.Connectors.OpenAiCompatible.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Content\**\*.md">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+</Project>

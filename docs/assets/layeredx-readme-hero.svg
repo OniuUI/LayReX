@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 200" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">LayReX · LayeredChat</title>
+  <desc id="desc">Banner for LayeredChat open-source library with layered stack and mascot mark.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="920" y2="200" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0b1220"/>
+      <stop offset="0.45" stop-color="#111827"/>
+      <stop offset="1" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#4B7BEC"/>
+      <stop offset="1" stop-color="#3370E0"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="920" height="200" rx="16" fill="url(#bg)"/>
+  <g opacity="0.35" transform="translate(48 36)">
+    <rect x="0" y="72" width="120" height="28" rx="8" fill="#334155"/>
+    <rect x="12" y="48" width="120" height="28" rx="8" fill="#475569"/>
+    <rect x="24" y="24" width="120" height="28" rx="8" fill="#64748b"/>
+    <rect x="36" y="0" width="120" height="28" rx="8" fill="url(#accent)" opacity="0.9"/>
+  </g>
+  <g transform="translate(700 44)" filter="url(#glow)">
+    <circle cx="64" cy="64" r="56" fill="url(#accent)"/>
+    <ellipse cx="52" cy="58" rx="14" ry="18" fill="#0f172a" opacity="0.85"/>
+    <ellipse cx="76" cy="58" rx="14" ry="18" fill="#0f172a" opacity="0.85"/>
+    <circle cx="54" cy="56" r="6" fill="#e2e8f0"/>
+    <circle cx="78" cy="56" r="6" fill="#e2e8f0"/>
+    <ellipse cx="64" cy="88" rx="20" ry="10" fill="#0f172a" opacity="0.2"/>
+  </g>
+  <text x="48" y="118" font-family="Segoe UI, ui-sans-serif, system-ui, sans-serif" font-size="42" font-weight="800" fill="#f8fafc" letter-spacing="-0.02em">LayReX</text>
+  <text x="48" y="154" font-family="Segoe UI, ui-sans-serif, system-ui, sans-serif" font-size="22" font-weight="600" fill="#94a3b8" letter-spacing="0.04em">LAYEREDCHAT</text>
+  <text x="48" y="182" font-family="Segoe UI, ui-sans-serif, system-ui, sans-serif" font-size="14" font-weight="500" fill="#64748b">Versioned LLM orchestration for .NET</text>
+  <rect x="48" y="128" width="72" height="4" rx="2" fill="url(#accent)" opacity="0.95"/>
+</svg>

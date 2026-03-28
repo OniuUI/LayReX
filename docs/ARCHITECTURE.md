@@ -1,0 +1,82 @@
+# LayReX / LayeredChat — architecture
+
+**LayReX** is the project name; **LayeredChat** is the .NET package family. This document describes the library only (no product-specific backends).
+
+## Design goals
+
+- **Versioned behavior** — `OrchestrationProfileManifest` + registry keys (`OrchestrationRegistryKeys`) so multiple “personalities” coexist without copy-pasting prompts.
+- **Thin core** — `LayeredChat.Core` has no Npgsql, MongoDB, Qdrant, EF Core, or domain types. Adapters live in named packages.
+- **Pluggable model access** — `ILlmChatConnector` and `IStreamingLlmChatConnector`; shipped implementations for OpenAI-compatible HTTP and `Microsoft.Extensions.AI`.
+- **First-class tools & context** — `IToolCatalog` / `IToolExecutor`; `IDataSourceProvider` for ordered context slices before each model call.
+- **Streaming or buffered** — `RunTurnStreamingAsync` emits `OrchestrationStreamEnvelope` for SSE, SignalR, or buses.
+- **Optional MCP** — `LayeredChat.Integrations.Mcp` maps Model Context Protocol tools into the same catalog/executor surface.
+- **Agents** — `IChatAgent` binds a stable logical agent to one orchestration registry key on a shared orchestrator.
+
+## Layering
+
+```text
+Host application
+    → ILlmChatConnector (+ optional streaming)
+    → IToolCatalog + IToolExecutor (+ optional MCP bridge)
+    → IOrchestrationDefinitionRegistry + IDataSourceRegistry
+    → LayeredChatOrchestrator
+```
+
+Manifest **allow-lists** tool names; the orchestrator never executes a tool not in that set.
+
+## Packages
+
+| Package | Responsibility |
+|--------|----------------|
+| `LayeredChat.Core` | Orchestrator, manifests, telemetry, forwarding DTOs, agents, composition helpers |
+| `LayeredChat.Connectors.OpenAiCompatible` | Sync + SSE against OpenAI-style HTTP APIs |
+| `LayeredChat.Connectors.ExtensionsAi` | Bridge to `IChatClient` |
+| `LayeredChat.Data.PostgreSql` | Parameterized SQL slices + guarded read-only tool |
+| `LayeredChat.Data.MongoDb` | Mongo `find`-style slice + tool |
+| `LayeredChat.Data.Qdrant` | Vector search slice |
+| `LayeredChat.Integrations.Mcp` | MCP client session → `IToolCatalog` + `IToolExecutor` |
+
+## Core source layout (`src/Core/LayeredChat.Core/`)
+
+Sources are grouped by concern (public namespace remains `LayeredChat`):
+
+| Folder | Contents |
+|--------|----------|
+| `Chat/` | Messages and tool-call DTOs |
+| `Llm/` | Connectors, stream frames, request options |
+| `Tools/` | Catalogs and executors (including `CompositeToolCatalog`, `RoutedToolExecutor`) |
+| `Context/` | Data sources and registries |
+| `Profiles/` | Definitions, manifests, in-memory registry |
+| `Orchestration/` | `LayeredChatOrchestrator`, turn DTOs, stream envelopes, session context |
+| `Forward/` | HTTP forward to remote “version pods” |
+| `Telemetry/` | Hooks and chained telemetry |
+| `Agents/` | `LayeredChatAgent`, registry, `AgentTurnInput` |
+
+## Version pods
+
+Manifest fields `ExternalForwardUri` / `ExternalForwardTimeoutSeconds` plus `IHttpOrchestrationForwarder` allow forwarding a turn to another deployment (e.g. container pinned to a semantic version). The **VersionHost** sample implements the receive side.
+
+## Security notes
+
+- Manifests must not be treated as an authorization layer; enforce tenant and tool policy in the host.
+- Prefer read-only DB roles and server-side resolution of SQL / vector targets over raw strings in manifests for untrusted users.
+
+## Build
+
+From repository root (this folder):
+
+```bash
+dotnet build LayeredChat.sln
+dotnet test tests/LayeredChat.Core.Tests/LayeredChat.Core.Tests.csproj
+```
+
+Docker (version host sample), from the same root:
+
+```bash
+docker build -f deploy/version-pod/Dockerfile -t layered-chat-version-host:latest .
+```
+
+## References
+
+- [README](../README.md) — quick start, MCP wiring, package list
+- [Model Context Protocol C# SDK](https://github.com/modelcontextprotocol/csharp-sdk)

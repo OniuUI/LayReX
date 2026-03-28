@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <RootNamespace>LayeredChat.Connectors.OpenAiCompatible</RootNamespace>
+    <AssemblyName>LayeredChat.Connectors.OpenAiCompatible</AssemblyName>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
+    <PackageId>LayeredChat.Connectors.OpenAiCompatible</PackageId>
+    <Version>$(LayeredChatVersion)</Version>
+    <Description>OpenAI-compatible HTTP connector (sync + SSE streaming) for LayeredChat.Core.</Description>
+    <PackageTags>llm;openai;ollama;layeredchat</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\Core\LayeredChat.Core\LayeredChat.Core.csproj" />
+  </ItemGroup>
+
+</Project>

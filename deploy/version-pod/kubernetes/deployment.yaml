@@ -1,0 +1,74 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: layered-chat-version-manifest
+data:
+  manifest.json: |
+    {
+      "schemaVersion": 1,
+      "orchestrationId": "k8s-version-pod",
+      "semanticVersion": "1.0.0",
+      "displayName": "Kubernetes version pod",
+      "allowedToolNames": [],
+      "dataSourceIdsInOrder": [],
+      "maxToolIterations": 4,
+      "defaultTemperature": 0.2
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: layered-chat-version-pod
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: layered-chat-version-pod
+  template:
+    metadata:
+      labels:
+        app: layered-chat-version-pod
+    spec:
+      containers:
+        - name: version-host
+          image: layered-chat-version-host:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: LAYEREDCHAT_MANIFEST_PATH
+              value: /config/manifest.json
+            - name: OPENAI_COMPATIBLE_BASE_URL
+              value: "https://api.openai.com/v1/"
+            - name: OPENAI_COMPATIBLE_MODEL
+              value: "gpt-4o-mini"
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: openai-api-key
+                  key: token
+                  optional: true
+          volumeMounts:
+            - name: manifest
+              mountPath: /config
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 10
+      volumes:
+        - name: manifest
+          configMap:
+            name: layered-chat-version-manifest
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: layered-chat-version-pod
+spec:
+  selector:
+    app: layered-chat-version-pod
+  ports:
+    - port: 80
+      targetPort: 8080

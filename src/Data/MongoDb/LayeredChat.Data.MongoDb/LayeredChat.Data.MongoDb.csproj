@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <RootNamespace>LayeredChat.Data.MongoDb</RootNamespace>
+    <AssemblyName>LayeredChat.Data.MongoDb</AssemblyName>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
+    <PackageId>LayeredChat.Data.MongoDb</PackageId>
+    <Version>$(LayeredChatVersion)</Version>
+    <Description>MongoDB JSON find/aggregate context slices for LayeredChat.</Description>
+    <PackageTags>llm;mongodb;layeredchat</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MongoDB.Driver" Version="3.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\Core\LayeredChat.Core\LayeredChat.Core.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,13 @@
+<Project>
+  <PropertyGroup>
+    <LayeredChatVersion>0.2.0</LayeredChatVersion>
+    <Authors>OniuUI; Boligsektor</Authors>
+    <PackageProjectUrl>https://github.com/OniuUI/LayReX</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/OniuUI/LayReX.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+</Project>

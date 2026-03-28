@@ -1,0 +1,15 @@
+services:
+  version-pod:
+    build:
+      context: ../..
+      dockerfile: deploy/version-pod/Dockerfile
+    ports:
+      - "8088:8080"
+    environment:
+      LAYEREDCHAT_INCLUDE_EXAMPLE_MARKDOWN: "true"
+      LAYEREDCHAT_MANIFEST_PATH: /config/manifest.json
+      OPENAI_COMPATIBLE_BASE_URL: ${OPENAI_COMPATIBLE_BASE_URL:-https://api.openai.com/v1/}
+      OPENAI_COMPATIBLE_MODEL: ${OPENAI_COMPATIBLE_MODEL:-gpt-4o-mini}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    volumes:
+      - ./example-manifest.json:/config/manifest.json:ro

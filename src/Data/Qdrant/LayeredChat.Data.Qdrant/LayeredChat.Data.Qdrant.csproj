@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <RootNamespace>LayeredChat.Data.Qdrant</RootNamespace>
+    <AssemblyName>LayeredChat.Data.Qdrant</AssemblyName>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
+    <PackageId>LayeredChat.Data.Qdrant</PackageId>
+    <Version>$(LayeredChatVersion)</Version>
+    <Description>Qdrant vector search context slices for LayeredChat.</Description>
+    <PackageTags>llm;qdrant;vector;layeredchat</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Qdrant.Client" Version="1.13.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\Core\LayeredChat.Core\LayeredChat.Core.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <RootNamespace>LayeredChat.Data.PostgreSql</RootNamespace>
+    <AssemblyName>LayeredChat.Data.PostgreSql</AssemblyName>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
+    <PackageId>LayeredChat.Data.PostgreSql</PackageId>
+    <Version>$(LayeredChatVersion)</Version>
+    <Description>PostgreSQL tabular context slices and optional readonly SQL tool for LayeredChat.</Description>
+    <PackageTags>llm;postgresql;layeredchat</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Npgsql" Version="9.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\Core\LayeredChat.Core\LayeredChat.Core.csproj" />
+  </ItemGroup>
+
+</Project>

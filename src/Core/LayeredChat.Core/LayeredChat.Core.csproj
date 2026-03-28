@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>LayeredChat</RootNamespace>
+    <AssemblyName>LayeredChat.Core</AssemblyName>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
+    <PackageId>LayeredChat.Core</PackageId>
+    <Version>$(LayeredChatVersion)</Version>
+    <Authors>Boligsektor</Authors>
+    <Description>Versioned orchestration layer for LLM tool loops: pluggable model connectors, tool host, data sources, and output capabilities.</Description>
+    <PackageTags>llm;ai;orchestration;tools;chat</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+
+</Project>

@@ -1,0 +1,22 @@
+name: build
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+      - name: Restore
+        run: dotnet restore LayeredChat.sln
+      - name: Build
+        run: dotnet build LayeredChat.sln -c Release --no-restore
+      - name: Test
+        run: dotnet test LayeredChat.sln -c Release --no-build --verbosity normal
