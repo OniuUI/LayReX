@@ -28,6 +28,15 @@ Manifest **allow-lists** tool names; the orchestrator never executes a tool not 
 
 Optional **`IToolRoundCatalogProvider`** (on `OrchestrationExecutionHooks`) may supply a **subset** of those names per model round so hosts can narrow or expand tools without a second HTTP stack.
 
+## Layers vs host stack (terminology)
+
+The diagram above is the **infrastructure / host stack**: connector, tools, data-source registry, orchestrator.
+
+**Orchestration layers** are a separate concept: **versioned contribution packages** (`layer.json` under a bundle layout) that merge into an **effective** `OrchestrationProfileManifest` (tool allow-list union, ordered data-source ids, parameters, instruction fragments). See [ADR-0001-layers-and-composition.md](ADR-0001-layers-and-composition.md), [LAYER_PACKAGE_FORMAT.md](LAYER_PACKAGE_FORMAT.md), and `ILayerCompositionService` in Core.
+
+- **Not automatic domain routing** — LayReX does not infer “user is in preference mode” and swap layers; the host chooses a stack (or a single manifest) per tenant, surface, or deployment.
+- **Composition is deterministic** — Same baseline + same resolved layers yields the same effective manifest and same ordered instruction fragments.
+
 ## Packages
 
 | Package | Responsibility |
@@ -51,6 +60,7 @@ Sources are grouped by concern (public namespace remains `LayeredChat`):
 | `Tools/` | Catalogs and executors (including `CompositeToolCatalog`, `RoutedToolExecutor`) |
 | `Context/` | Data sources and registries |
 | `Profiles/` | Definitions, manifests, in-memory registry |
+| `Layers/` | Layer stack manifest, contributions, composition (`ILayerCompositionService`) |
 | `Orchestration/` | `LayeredChatOrchestrator`, turn DTOs, stream envelopes, session context |
 | `Forward/` | HTTP forward to remote “version pods” |
 | `Telemetry/` | Hooks and chained telemetry |
@@ -91,4 +101,7 @@ docker build -f deploy/version-pod/Dockerfile -t layered-chat-version-host:lates
 - [TELEMETRY_AND_BILLING.md](TELEMETRY_AND_BILLING.md) — observability and billing hooks
 - [CONNECTORS.md](CONNECTORS.md) — provider matrix and self-hosting
 - [SAMPLES.md](SAMPLES.md) — short recipes (telemetry, MCP, tools per round)
+- [ADR-0001-layers-and-composition.md](ADR-0001-layers-and-composition.md) — orchestration layers vs host stack
+- [LAYER_PACKAGE_FORMAT.md](LAYER_PACKAGE_FORMAT.md) — layer bundle layout and merge rules
+- [ROADMAP_LAYERS_AND_CLI.md](ROADMAP_LAYERS_AND_CLI.md) — CLI, control plane, pods
 - [Model Context Protocol C# SDK](https://github.com/modelcontextprotocol/csharp-sdk)

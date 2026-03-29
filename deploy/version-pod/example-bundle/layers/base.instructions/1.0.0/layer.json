@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "layerId": "base.instructions",
+  "semanticVersion": "1.0.0",
+  "instructionFragment": "You are running inside a LayReX version pod with composed layers. Keep answers short unless asked otherwise."
+}

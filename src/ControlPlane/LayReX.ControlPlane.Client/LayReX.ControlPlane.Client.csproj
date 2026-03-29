@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>LayReX.ControlPlane.Client</RootNamespace>
+    <AssemblyName>LayReX.ControlPlane.Client</AssemblyName>
+    <Description>HTTP client for the optional LayReX layer registry (LayeredChat.ControlPlane).</Description>
+    <PackageId>LayReX.ControlPlane.Client</PackageId>
+    <IsPackable>true</IsPackable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Core\LayeredChat.Core\LayeredChat.Core.csproj" />
+  </ItemGroup>
+
+</Project>

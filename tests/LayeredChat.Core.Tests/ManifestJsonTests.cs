@@ -37,5 +37,6 @@ public sealed class ManifestJsonTests
         Assert.Equal(original.MaxToolIterations, restored.MaxToolIterations);
         Assert.Equal(original.DefaultTemperature, restored.DefaultTemperature);
         Assert.Equal("5", restored.Parameters["rag.topK"]);
+        Assert.Null(restored.LayerStack);
     }
 }

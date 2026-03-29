@@ -14,6 +14,51 @@ if (string.IsNullOrWhiteSpace(manifestPath) || !File.Exists(manifestPath))
 
 var manifestJson = await File.ReadAllTextAsync(manifestPath);
 var manifest = OrchestrationProfileManifestJson.Deserialize(manifestJson);
+
+var bundleRoot = builder.Configuration["LAYEREDCHAT_LAYER_BUNDLE_ROOT"]
+                 ?? Environment.GetEnvironmentVariable("LAYEREDCHAT_LAYER_BUNDLE_ROOT");
+string? composedInstructionPrefix = null;
+if (!string.IsNullOrWhiteSpace(bundleRoot) && Directory.Exists(bundleRoot))
+{
+    var stack = await LayerBundleDirectoryLoader.LoadStackManifestAsync(bundleRoot.Trim(), CancellationToken.None)
+        .ConfigureAwait(false);
+    var contributions = await LayerBundleDirectoryLoader.LoadContributionsAsync(bundleRoot.Trim(), stack, CancellationToken.None)
+        .ConfigureAwait(false);
+    var baseline = new OrchestrationProfileManifest
+    {
+        SchemaVersion = manifest.SchemaVersion,
+        OrchestrationId = manifest.OrchestrationId,
+        SemanticVersion = manifest.SemanticVersion,
+        ProfileVersion = manifest.ProfileVersion,
+        DisplayName = manifest.DisplayName,
+        Description = manifest.Description,
+        AllowedToolNames = manifest.AllowedToolNames,
+        DataSourceIdsInOrder = manifest.DataSourceIdsInOrder,
+        OutputCapabilities = manifest.OutputCapabilities,
+        MaxToolIterations = manifest.MaxToolIterations,
+        DefaultTemperature = manifest.DefaultTemperature,
+        Parameters = manifest.Parameters,
+        ExternalForwardUri = manifest.ExternalForwardUri,
+        ExternalForwardTimeoutSeconds = manifest.ExternalForwardTimeoutSeconds,
+        LlmAdapterProfileId = manifest.LlmAdapterProfileId,
+        PreferredConnectorKind = manifest.PreferredConnectorKind,
+        LayerStack = null
+    };
+    var composition = new LayerCompositionService().Compose(baseline, contributions);
+    manifest = composition.EffectiveManifest;
+    composedInstructionPrefix = composition.JoinInstructionFragments("\n\n");
+    if (composedInstructionPrefix.Length == 0)
+    {
+        composedInstructionPrefix = null;
+    }
+}
+else if (manifest.LayerStack is { Entries.Count: > 0 })
+{
+    throw new InvalidOperationException(
+        "Orchestration manifest declares layerStack entries but LAYEREDCHAT_LAYER_BUNDLE_ROOT is not set or missing. " +
+        "Provide a bundle directory with stack.json and layers/, or remove layerStack from the manifest.");
+}
+
 var definition = new OrchestrationDefinition { Manifest = manifest };
 
 var registry = new InMemoryOrchestrationDefinitionRegistry();
@@ -65,6 +110,24 @@ app.MapPost("/v1/orchestration/forward", async (
     CancellationToken ct) =>
 {
     var request = OrchestrationForwardMapping.FromDto(body.Request);
+    if (composedInstructionPrefix is { Length: > 0 })
+    {
+        var merged = string.IsNullOrWhiteSpace(request.SystemInstructionText)
+            ? composedInstructionPrefix
+            : composedInstructionPrefix + "\n\n" + request.SystemInstructionText;
+        request = new LayeredChatTurnRequest
+        {
+            OrchestrationRegistryKey = request.OrchestrationRegistryKey,
+            PriorMessages = request.PriorMessages,
+            UserMessageContent = request.UserMessageContent,
+            SystemInstructionText = merged,
+            Session = request.Session,
+            ConnectorOptions = request.ConnectorOptions,
+            Hooks = request.Hooks,
+            ModelAdapterProfile = request.ModelAdapterProfile
+        };
+    }
+
     if (includeExampleMarkdown)
     {
         request = await ExampleMarkdownComposer.MergeBundledExampleAsync(request, ct).ConfigureAwait(false);
