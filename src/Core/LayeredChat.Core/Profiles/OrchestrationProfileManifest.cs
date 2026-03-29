@@ -45,4 +45,8 @@ public sealed class OrchestrationProfileManifest
     public string? LlmAdapterProfileId { get; init; }
 
     public string? PreferredConnectorKind { get; init; }
+
+    /// <summary>Optional ordered layer references. Hosts resolve each to a <see cref="LayerContribution"/> and call <see cref="ILayerCompositionService.Compose"/>.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public LayerStackDeclaration? LayerStack { get; init; }
 }

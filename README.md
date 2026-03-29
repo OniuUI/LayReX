@@ -14,7 +14,7 @@
 [![NuGet LayeredChat.Core](https://img.shields.io/nuget/v/LayeredChat.Core?label=NuGet&logo=nuget)](https://www.nuget.org/packages/LayeredChat.Core)
 [![Contributions](https://img.shields.io/badge/contributions-welcome-brightgreen.svg)](#contributing)
 
-[Architecture](docs/ARCHITECTURE.md) · [Telemetry & billing](docs/TELEMETRY_AND_BILLING.md) · [Connectors matrix](docs/CONNECTORS.md)
+[Architecture](docs/ARCHITECTURE.md) · [Layers roadmap](docs/ROADMAP_LAYERS_AND_CLI.md) · [Telemetry & billing](docs/TELEMETRY_AND_BILLING.md) · [Connectors matrix](docs/CONNECTORS.md)
 
 </div>
 
@@ -29,6 +29,8 @@
 | **RAG / SQL / vectors** as first-class context | `IDataSourceProvider` + PostgreSQL, MongoDB, Qdrant packages |
 | **SSE / buses / gateways** | `RunTurnStreamingAsync` → `OrchestrationStreamEnvelope` |
 | **Remote version pods** | `ExternalForwardUri` + `HttpOrchestrationForwarder` + [VersionHost](samples/VersionHost) |
+| **Composed orchestration layers** | `LayerStackManifest`, `LayerContribution`, `ILayerCompositionService`; see [docs/LAYER_PACKAGE_FORMAT.md](docs/LAYER_PACKAGE_FORMAT.md) |
+| **Optional layer registry + CLI** | [LayeredChat.ControlPlane](src/ControlPlane/LayeredChat.ControlPlane), [LayReX.ControlPlane.Client](src/ControlPlane/LayReX.ControlPlane.Client), [LayReX-CLI](../LayReX-CLI/README.md) |
 
 ---
 
@@ -36,7 +38,9 @@
 
 | Package | Purpose |
 |--------|---------|
-| `LayeredChat.Core` | Orchestrator, manifests, telemetry, streaming, forward DTOs |
+| `LayeredChat.Core` | Orchestrator, manifests, layer composition, telemetry, streaming, forward DTOs |
+| `LayReX.ControlPlane.Client` | HTTP client for the optional layer registry (publish from LayReX repo) |
+| `LayReX.CLI` | Global tool `layrex` — validate/pack/push bundles ([LayReX-CLI](../LayReX-CLI)) |
 | `LayeredChat.Connectors.OpenAiCompatible` | OpenAI-style HTTP (sync + SSE) |
 | `LayeredChat.Connectors.ExtensionsAi` | `Microsoft.Extensions.AI.IChatClient` |
 | `LayeredChat.Data.PostgreSql` | SQL slices + `postgresql_readonly_select` tool |
