@@ -1,8 +1,7 @@
 **/bin/
 **/obj/
 artifacts/
-nuget-publish.local.ps1
-nuget-publish.local.example.ps1
+nuget-publish.ps1
 .vs/
 *.user
 *.suo

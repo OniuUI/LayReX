@@ -1,5 +1,6 @@
 <Project>
   <PropertyGroup>
+    <!-- CI on main: next patch on NuGet for this major.minor (0.3.*). Keep 0.3.0 here while shipping 0.3.1, 0.3.2, … Changing to 0.4.0 makes the next main publish 0.4.0, not 0.3.1. -->
     <LayeredChatVersion>0.3.0</LayeredChatVersion>
     <Version>$(LayeredChatVersion)</Version>
     <PackageVersion>$(LayeredChatVersion)</PackageVersion>
