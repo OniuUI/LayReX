@@ -1,3 +1,7 @@
+# NuGet versioning (shared across all packable projects in the solution):
+# - Push to main/master: next PATCH only on the major.minor from <LayeredChatVersion> (e.g. 0.3.0 in props + 0.3.0 on NuGet => publish 0.3.1).
+#   Changing props to 0.4.0 switches the line to 0.4.x (next would be 0.4.0), not another 0.3.x patch.
+# - Tag vX.Y.Z or workflow_dispatch: publish that exact version.
 name: Publish NuGet
 
 on:
@@ -81,7 +85,7 @@ jobs:
           PY
           )
           echo "version=${CHOSEN}" >> "$GITHUB_OUTPUT"
-          echo "Publishing version ${CHOSEN} (NuGet line ${CHOSEN%.*}.x from Directory.Build.props)"
+          echo "Publishing ${CHOSEN} (next patch on ${CHOSEN%.*}.x; baseline LayeredChatVersion in Directory.Build.props)"
 
       - name: Restore
         run: dotnet restore LayeredChat.sln
