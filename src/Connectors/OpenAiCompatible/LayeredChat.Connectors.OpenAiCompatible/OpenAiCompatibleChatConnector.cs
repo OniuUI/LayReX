@@ -127,7 +127,12 @@ public sealed class OpenAiCompatibleChatConnector : IStreamingLlmChatConnector
         LlmRequestOptions options,
         bool stream)
     {
-        var msgObjs = messages.Select(MapMessage).ToList();
+        var msgObjs = new List<object>(messages.Count);
+        foreach (var message in messages)
+        {
+            msgObjs.Add(MapMessage(message));
+        }
+
         var body = new Dictionary<string, object?>
         {
             ["model"] = model,
@@ -143,18 +148,22 @@ public sealed class OpenAiCompatibleChatConnector : IStreamingLlmChatConnector
 
         if (tools.Count > 0)
         {
-            body["tools"] = tools.Select(t => new Dictionary<string, object?>
+            var toolObjs = new List<object>(tools.Count);
+            foreach (var t in tools)
             {
-                ["type"] = "function",
-                ["function"] = new Dictionary<string, object?>
+                toolObjs.Add(new Dictionary<string, object?>
                 {
-                    ["name"] = t.Name,
-                    ["description"] = t.Description,
-                    ["parameters"] = JsonSerializer.Deserialize<JsonElement>(string.IsNullOrWhiteSpace(t.ParametersSchemaJson)
-                        ? "{}"
-                        : t.ParametersSchemaJson)
-                }
-            }).ToList();
+                    ["type"] = "function",
+                    ["function"] = new Dictionary<string, object?>
+                    {
+                        ["name"] = t.Name,
+                        ["description"] = t.Description,
+                        ["parameters"] = t.ResolveParametersElement()
+                    }
+                });
+            }
+
+            body["tools"] = toolObjs;
         }
 
         return body;
@@ -177,16 +186,22 @@ public sealed class OpenAiCompatibleChatConnector : IStreamingLlmChatConnector
 
                 if (m.ToolCalls is { Count: > 0 } tc)
                 {
-                    d["tool_calls"] = tc.Select(c => new Dictionary<string, object?>
+                    var toolCallObjs = new List<object>(tc.Count);
+                    foreach (var c in tc)
                     {
-                        ["id"] = c.CallId,
-                        ["type"] = "function",
-                        ["function"] = new Dictionary<string, object?>
+                        toolCallObjs.Add(new Dictionary<string, object?>
                         {
-                            ["name"] = c.Name,
-                            ["arguments"] = string.IsNullOrWhiteSpace(c.ArgumentsJson) ? "{}" : c.ArgumentsJson
-                        }
-                    }).ToList();
+                            ["id"] = c.CallId,
+                            ["type"] = "function",
+                            ["function"] = new Dictionary<string, object?>
+                            {
+                                ["name"] = c.Name,
+                                ["arguments"] = string.IsNullOrWhiteSpace(c.ArgumentsJson) ? "{}" : c.ArgumentsJson
+                            }
+                        });
+                    }
+
+                    d["tool_calls"] = toolCallObjs;
                 }
 
                 return d;

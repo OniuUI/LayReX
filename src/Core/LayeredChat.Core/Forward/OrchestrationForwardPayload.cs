@@ -82,4 +82,6 @@ public sealed class LlmRequestOptionsDto
     public int? MaxToolRoundIterations { get; init; }
 
     public string? ModelNameOverride { get; init; }
+
+    public OrchestrationTelemetryVerbosity TelemetryVerbosity { get; init; } = OrchestrationTelemetryVerbosity.Normal;
 }
