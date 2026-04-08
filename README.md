@@ -258,4 +258,4 @@ If you use this library in the wild, a ⭐ on the repo or a short issue with you
 
 Canonical home: **[github.com/OniuUI/LayReX](https://github.com/OniuUI/LayReX)**.
 
-**LayReX · LayeredChat** originated in the Boligsektor codebase; this repository is the standalone OSS distribution. Hero artwork: [`docs/assets/layeredx-hero.png`](docs/assets/layeredx-hero.png) (replace with your own branding if you fork).
+**LayReX · LayeredChat** is a vendor-neutral LLM orchestration library: the public API lives under the `LayeredChat` root namespace and carries no host- or domain-specific types. Hero artwork: [`docs/assets/layeredx-hero.png`](docs/assets/layeredx-hero.png) (replace with your own branding if you fork).

@@ -20,4 +20,9 @@ public sealed class LayeredChatTurnResult
     public int TotalInputTokens { get; init; }
 
     public int TotalOutputTokens { get; init; }
+
+    /// <summary>
+    /// When a <see cref="ITurnContinuationEvaluator"/> ran on the final assistant round, optional metadata for hosts (also mirrored on stream summary attributes when streaming).
+    /// </summary>
+    public IReadOnlyDictionary<string, string>? CompletionEvaluationMetadata { get; init; }
 }

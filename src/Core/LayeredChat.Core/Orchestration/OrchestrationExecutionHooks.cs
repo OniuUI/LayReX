@@ -13,4 +13,9 @@ public sealed class OrchestrationExecutionHooks
     /// Optional per-round narrowing or expansion of tools (subset of manifest allow-list).
     /// </summary>
     public IToolRoundCatalogProvider? ToolRoundCatalogProvider { get; init; }
+
+    /// <summary>
+    /// Optional evaluation after an assistant message with no tool calls; see <see cref="ITurnContinuationEvaluator"/>.
+    /// </summary>
+    public ITurnContinuationEvaluator? TurnContinuationEvaluator { get; init; }
 }

@@ -22,5 +22,13 @@ public enum OrchestrationStreamKind
     UsageUpdate,
     TurnCompleted,
     TurnResultSummary,
+    /// <summary>
+    /// Turn continuation evaluation started; see TELEMETRY_AND_BILLING.md for attributes.
+    /// </summary>
+    CompletionEvaluationStarted,
+    /// <summary>
+    /// Turn continuation evaluation finished; attributes include loop effect and optional metadata.
+    /// </summary>
+    CompletionEvaluationFinished,
     Error
 }

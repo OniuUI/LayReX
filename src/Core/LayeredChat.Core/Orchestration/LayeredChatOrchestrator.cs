@@ -8,6 +8,9 @@ namespace LayeredChat;
 /// </summary>
 public sealed class LayeredChatOrchestrator
 {
+    private const int MaxCompletionEvalMetadataEntries = 16;
+    private const int MaxCompletionEvalMetadataValueLength = 512;
+
     private readonly ILlmChatConnector _connector;
     private readonly IToolExecutor _toolExecutor;
     private readonly IToolCatalog _toolCatalog;
@@ -103,6 +106,7 @@ public sealed class LayeredChatOrchestrator
         }
 
         string? lastAssistantText = null;
+        IReadOnlyDictionary<string, string>? completionEvalMetadata = null;
 
         for (var i = 0; i < maxIterations; i++)
         {
@@ -264,10 +268,42 @@ public sealed class LayeredChatOrchestrator
                 }, cancellationToken).ConfigureAwait(false);
             }
 
+            var (branch, evalMeta, nextSeq, evalEnvelopes) = await ProcessTurnContinuationAsync(
+                request,
+                manifest,
+                session,
+                prep,
+                appended,
+                completion,
+                i,
+                totalIn,
+                totalOut,
+                seq,
+                cancellationToken).ConfigureAwait(false);
+            seq = nextSeq;
+            foreach (var env in evalEnvelopes)
+            {
+                await EmitAsync(telemetry, env, cancellationToken).ConfigureAwait(false);
+            }
+
+            if (evalMeta is not null)
+                completionEvalMetadata = evalMeta;
+
+            if (branch == TurnContinuationBranch.Continue)
+                continue;
+
             break;
         }
 
-        var result = BuildResult(request.OrchestrationRegistryKey, session, manifest, lastAssistantText, appended, totalIn, totalOut);
+        var result = BuildResult(
+            request.OrchestrationRegistryKey,
+            session,
+            manifest,
+            lastAssistantText,
+            appended,
+            totalIn,
+            totalOut,
+            completionEvalMetadata);
 
         await EmitTurnSummaryAsync(telemetry, session, request, manifest, result, ++seq, cancellationToken)
             .ConfigureAwait(false);
@@ -348,6 +384,7 @@ public sealed class LayeredChatOrchestrator
         }
 
         string? lastAssistantText = null;
+        IReadOnlyDictionary<string, string>? completionEvalMetadata = null;
 
         for (var round = 0; round < maxIterations; round++)
         {
@@ -554,10 +591,42 @@ public sealed class LayeredChatOrchestrator
                 };
             }
 
+            var (branch, evalMeta, nextSeqStream, evalEnvelopesStream) = await ProcessTurnContinuationAsync(
+                request,
+                manifest,
+                session,
+                prep,
+                appended,
+                completion,
+                round,
+                totalIn,
+                totalOut,
+                seq,
+                cancellationToken).ConfigureAwait(false);
+            seq = nextSeqStream;
+            foreach (var env in evalEnvelopesStream)
+            {
+                yield return env;
+            }
+
+            if (evalMeta is not null)
+                completionEvalMetadata = evalMeta;
+
+            if (branch == TurnContinuationBranch.Continue)
+                continue;
+
             break;
         }
 
-        var result = BuildResult(request.OrchestrationRegistryKey, session, manifest, lastAssistantText, appended, totalIn, totalOut);
+        var result = BuildResult(
+            request.OrchestrationRegistryKey,
+            session,
+            manifest,
+            lastAssistantText,
+            appended,
+            totalIn,
+            totalOut,
+            completionEvalMetadata);
         yield return SummaryEnvelope(++seq, session, request, manifest, result);
         yield return Envelope(++seq, OrchestrationStreamKind.TurnCompleted, session, request, manifest, null);
     }
@@ -569,6 +638,21 @@ public sealed class LayeredChatOrchestrator
         OrchestrationProfileManifest manifest,
         LayeredChatTurnResult result)
     {
+        var attrs = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["assistantText"] = result.AssistantText ?? string.Empty,
+            ["totalInputTokens"] = result.TotalInputTokens.ToString(),
+            ["totalOutputTokens"] = result.TotalOutputTokens.ToString(),
+            ["appendedCount"] = result.AppendedMessages.Count.ToString()
+        };
+        if (result.CompletionEvaluationMetadata is { Count: > 0 } meta)
+        {
+            foreach (var kv in meta)
+            {
+                attrs["completionEval_" + kv.Key] = TruncateCompletionEvalValue(kv.Value);
+            }
+        }
+
         return new OrchestrationStreamEnvelope
         {
             Kind = OrchestrationStreamKind.TurnResultSummary,
@@ -577,13 +661,7 @@ public sealed class LayeredChatOrchestrator
             RegistryKey = request.OrchestrationRegistryKey,
             OrchestrationId = manifest.OrchestrationId,
             SemanticVersion = manifest.SemanticVersion,
-            Attributes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["assistantText"] = result.AssistantText ?? string.Empty,
-                ["totalInputTokens"] = result.TotalInputTokens.ToString(),
-                ["totalOutputTokens"] = result.TotalOutputTokens.ToString(),
-                ["appendedCount"] = result.AppendedMessages.Count.ToString()
-            }
+            Attributes = attrs
         };
     }
 
@@ -851,7 +929,8 @@ public sealed class LayeredChatOrchestrator
         string? assistantText,
         List<ChatMessage> appended,
         int totalIn,
-        int totalOut)
+        int totalOut,
+        IReadOnlyDictionary<string, string>? completionEvaluationMetadata = null)
     {
         return new LayeredChatTurnResult
         {
@@ -862,8 +941,208 @@ public sealed class LayeredChatOrchestrator
             AssistantText = assistantText,
             AppendedMessages = appended,
             TotalInputTokens = totalIn,
-            TotalOutputTokens = totalOut
+            TotalOutputTokens = totalOut,
+            CompletionEvaluationMetadata = completionEvaluationMetadata
         };
+    }
+
+    private enum TurnContinuationBranch
+    {
+        Break,
+        Continue
+    }
+
+    /// <summary>
+    /// Runs optional <see cref="ITurnContinuationEvaluator"/> after a no-tool assistant message; builds telemetry envelopes and mutates working transcript when continuing.
+    /// </summary>
+    private async Task<(
+        TurnContinuationBranch Branch,
+        IReadOnlyDictionary<string, string>? ResultMetadata,
+        long NextSequence,
+        List<OrchestrationStreamEnvelope> Envelopes)> ProcessTurnContinuationAsync(
+        LayeredChatTurnRequest request,
+        OrchestrationProfileManifest manifest,
+        OrchestrationSessionContext session,
+        TurnPreparation prep,
+        List<ChatMessage> appended,
+        LlmCompletionResult completion,
+        int roundIndex,
+        int cumulativeInputTokens,
+        int cumulativeOutputTokens,
+        long sequenceAfterAssistantCommitted,
+        CancellationToken cancellationToken)
+    {
+        var envelopes = new List<OrchestrationStreamEnvelope>();
+        var next = sequenceAfterAssistantCommitted;
+        var evaluator = request.Hooks?.TurnContinuationEvaluator;
+        if (evaluator is null)
+        {
+            return (TurnContinuationBranch.Break, null, next, envelopes);
+        }
+
+        var startedAttrs = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["round"] = roundIndex.ToString(),
+            ["orchestrationId"] = manifest.OrchestrationId,
+            ["registryKey"] = request.OrchestrationRegistryKey,
+            ["evaluatorId"] = evaluator.EvaluatorId
+        };
+        envelopes.Add(new OrchestrationStreamEnvelope
+        {
+            Kind = OrchestrationStreamKind.CompletionEvaluationStarted,
+            Sequence = ++next,
+            CorrelationId = session.CorrelationId,
+            RegistryKey = request.OrchestrationRegistryKey,
+            OrchestrationId = manifest.OrchestrationId,
+            SemanticVersion = manifest.SemanticVersion,
+            Attributes = startedAttrs
+        });
+
+        TurnContinuationEvaluationResult evalResult;
+        try
+        {
+            var ctx = new TurnContinuationEvaluationContext
+            {
+                Manifest = manifest,
+                Request = request,
+                Session = session,
+                RoundIndex = roundIndex,
+                WorkingTranscript = prep.Working,
+                LastCompletion = completion,
+                CumulativeInputTokens = cumulativeInputTokens,
+                CumulativeOutputTokens = cumulativeOutputTokens,
+                CorrelationId = session.CorrelationId
+            };
+            evalResult = await evaluator.EvaluateAfterAssistantRoundAsync(ctx, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            var errAttrs = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["round"] = roundIndex.ToString(),
+                ["evaluatorId"] = evaluator.EvaluatorId,
+                ["error"] = "true",
+                ["exceptionType"] = ex.GetType().Name,
+                ["message"] = TruncateCompletionEvalValue(ex.Message)
+            };
+            envelopes.Add(new OrchestrationStreamEnvelope
+            {
+                Kind = OrchestrationStreamKind.CompletionEvaluationFinished,
+                Sequence = ++next,
+                CorrelationId = session.CorrelationId,
+                RegistryKey = request.OrchestrationRegistryKey,
+                OrchestrationId = manifest.OrchestrationId,
+                SemanticVersion = manifest.SemanticVersion,
+                Attributes = errAttrs
+            });
+            return (TurnContinuationBranch.Break, null, next, envelopes);
+        }
+
+        var safeMeta = NormalizeCompletionEvalMetadata(evalResult.Metadata);
+        var finishedAttrs = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["round"] = roundIndex.ToString(),
+            ["evaluatorId"] = evaluator.EvaluatorId,
+            ["loopEffect"] = evalResult.LoopEffect.ToString()
+        };
+        MergeEvalMetadataIntoAttributes(finishedAttrs, safeMeta);
+        var invalidInjection = false;
+        TurnContinuationBranch branch = TurnContinuationBranch.Break;
+        IReadOnlyDictionary<string, string>? resultMeta = safeMeta;
+
+        switch (evalResult.LoopEffect)
+        {
+            case TurnContinuationLoopEffect.CompleteTurn:
+            case TurnContinuationLoopEffect.AdvisoryOnly:
+                finishedAttrs["turnEnds"] = "true";
+                break;
+            case TurnContinuationLoopEffect.ContinueWithInjectedMessages:
+            {
+                var toInject = evalResult.MessagesToInjectBeforeNextModelRound;
+                if (toInject is not { Count: > 0 })
+                {
+                    invalidInjection = true;
+                    finishedAttrs["invalidInjection"] = "true";
+                    finishedAttrs["turnEnds"] = "true";
+                }
+                else
+                {
+                    foreach (var m in toInject)
+                    {
+                        prep.Working.Add(m);
+                        appended.Add(m);
+                    }
+
+                    finishedAttrs["injectedMessageCount"] = toInject.Count.ToString();
+                    finishedAttrs["turnEnds"] = "false";
+                    branch = TurnContinuationBranch.Continue;
+                }
+
+                break;
+            }
+            default:
+                finishedAttrs["turnEnds"] = "true";
+                break;
+        }
+
+        if (invalidInjection)
+        {
+            resultMeta = safeMeta;
+        }
+
+        envelopes.Add(new OrchestrationStreamEnvelope
+        {
+            Kind = OrchestrationStreamKind.CompletionEvaluationFinished,
+            Sequence = ++next,
+            CorrelationId = session.CorrelationId,
+            RegistryKey = request.OrchestrationRegistryKey,
+            OrchestrationId = manifest.OrchestrationId,
+            SemanticVersion = manifest.SemanticVersion,
+            Attributes = finishedAttrs
+        });
+
+        return (branch, resultMeta, next, envelopes);
+    }
+
+    private static void MergeEvalMetadataIntoAttributes(
+        Dictionary<string, string> target,
+        IReadOnlyDictionary<string, string>? meta)
+    {
+        if (meta is null || meta.Count == 0)
+            return;
+        foreach (var kv in meta)
+        {
+            target["meta_" + kv.Key] = TruncateCompletionEvalValue(kv.Value);
+        }
+    }
+
+    private static IReadOnlyDictionary<string, string>? NormalizeCompletionEvalMetadata(
+        IReadOnlyDictionary<string, string>? metadata)
+    {
+        if (metadata is null || metadata.Count == 0)
+            return null;
+        var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var n = 0;
+        foreach (var kv in metadata)
+        {
+            if (n >= MaxCompletionEvalMetadataEntries)
+                break;
+            if (string.IsNullOrEmpty(kv.Key))
+                continue;
+            dict[kv.Key] = TruncateCompletionEvalValue(kv.Value);
+            n++;
+        }
+
+        return dict.Count == 0 ? null : dict;
+    }
+
+    private static string TruncateCompletionEvalValue(string? value)
+    {
+        if (string.IsNullOrEmpty(value))
+            return string.Empty;
+        return value.Length <= MaxCompletionEvalMetadataValueLength
+            ? value
+            : value[..MaxCompletionEvalMetadataValueLength];
     }
 
     private static LayeredChatTurnResult EnsureCorrelation(

@@ -1,6 +1,6 @@
 # Roadmap: versioned layers, CLI, and control plane
 
-This document extends the approved LayReX plan with **what is implemented today** and **recommended next steps**. Product code (e.g. Boligsektor) stays a consumer of public packages; no domain coupling in `LayeredChat.Core`.
+This document extends the approved LayReX plan with **what is implemented today** and **recommended next steps**. Host applications stay consumers of public packages; no domain coupling in `LayeredChat.Core`.
 
 ## Vision
 
