@@ -14,4 +14,9 @@ public sealed class LlmRequestOptions
     public string? ModelNameOverride { get; init; }
 
     public LlmModelAdapterProfile? AdapterProfile { get; init; }
+
+    /// <summary>
+    /// Orchestrator stream envelope volume when <see cref="LayeredChatTurnRequest.Hooks"/> telemetry is attached.
+    /// </summary>
+    public OrchestrationTelemetryVerbosity TelemetryVerbosity { get; init; } = OrchestrationTelemetryVerbosity.Normal;
 }

@@ -141,9 +141,7 @@ public sealed class ExtensionsAiChatConnector : IStreamingLlmChatConnector
             var meTools = new List<Me.AITool>();
             foreach (var t in tools)
             {
-                var schema = JsonSerializer.Deserialize<JsonElement>(string.IsNullOrWhiteSpace(t.ParametersSchemaJson)
-                    ? "{}"
-                    : t.ParametersSchemaJson);
+                var schema = t.ResolveParametersElement();
                 var decl = Me.AIFunctionFactory.CreateDeclaration(t.Name, t.Description, schema, null);
                 meTools.Add(decl);
             }

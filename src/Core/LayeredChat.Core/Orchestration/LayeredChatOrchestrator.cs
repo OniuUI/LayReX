@@ -41,16 +41,20 @@ public sealed class LayeredChatOrchestrator
         var manifest = prep.Manifest;
         var session = prep.Session;
         long seq = 0;
+        var detailed = TelemetryIsDetailed(request);
 
-        await EmitAsync(telemetry, new OrchestrationStreamEnvelope
+        if (detailed)
         {
-            Kind = OrchestrationStreamKind.TurnStarted,
-            Sequence = ++seq,
-            CorrelationId = session.CorrelationId,
-            RegistryKey = request.OrchestrationRegistryKey,
-            OrchestrationId = manifest.OrchestrationId,
-            SemanticVersion = manifest.SemanticVersion
-        }, cancellationToken).ConfigureAwait(false);
+            await EmitAsync(telemetry, new OrchestrationStreamEnvelope
+            {
+                Kind = OrchestrationStreamKind.TurnStarted,
+                Sequence = ++seq,
+                CorrelationId = session.CorrelationId,
+                RegistryKey = request.OrchestrationRegistryKey,
+                OrchestrationId = manifest.OrchestrationId,
+                SemanticVersion = manifest.SemanticVersion
+            }, cancellationToken).ConfigureAwait(false);
+        }
 
         if (ShouldAttemptForward(request, manifest))
         {
@@ -90,7 +94,7 @@ public sealed class LayeredChatOrchestrator
             return ensured;
         }
 
-        await EmitContextSlicesAsync(telemetry, request, prep, ++seq, cancellationToken).ConfigureAwait(false);
+        await EmitContextSlicesAsync(telemetry, request, prep, detailed, ++seq, cancellationToken).ConfigureAwait(false);
 
         var appended = new List<ChatMessage>();
         var totalIn = 0;
@@ -108,19 +112,22 @@ public sealed class LayeredChatOrchestrator
         {
             var options = BuildConnectorOptions(request, manifest);
             var (roundTools, roundAllowed) = ResolveToolsForModelRound(i, prep, request);
-            await EmitAsync(telemetry, new OrchestrationStreamEnvelope
+            if (detailed)
             {
-                Kind = OrchestrationStreamKind.ModelRoundStarted,
-                Sequence = ++seq,
-                CorrelationId = session.CorrelationId,
-                RegistryKey = request.OrchestrationRegistryKey,
-                OrchestrationId = manifest.OrchestrationId,
-                SemanticVersion = manifest.SemanticVersion,
-                Attributes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                await EmitAsync(telemetry, new OrchestrationStreamEnvelope
                 {
-                    ["round"] = i.ToString()
-                }
-            }, cancellationToken).ConfigureAwait(false);
+                    Kind = OrchestrationStreamKind.ModelRoundStarted,
+                    Sequence = ++seq,
+                    CorrelationId = session.CorrelationId,
+                    RegistryKey = request.OrchestrationRegistryKey,
+                    OrchestrationId = manifest.OrchestrationId,
+                    SemanticVersion = manifest.SemanticVersion,
+                    Attributes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["round"] = i.ToString()
+                    }
+                }, cancellationToken).ConfigureAwait(false);
+            }
 
             var completion = await _connector
                 .CompleteAsync(prep.Working, roundTools, options, cancellationToken)
@@ -129,31 +136,34 @@ public sealed class LayeredChatOrchestrator
             totalIn += completion.InputTokens;
             totalOut += completion.OutputTokens;
 
-            await EmitAsync(telemetry, new OrchestrationStreamEnvelope
+            if (detailed)
             {
-                Kind = OrchestrationStreamKind.UsageUpdate,
-                Sequence = ++seq,
-                CorrelationId = session.CorrelationId,
-                RegistryKey = request.OrchestrationRegistryKey,
-                InputTokens = completion.InputTokens,
-                OutputTokens = completion.OutputTokens
-            }, cancellationToken).ConfigureAwait(false);
-
-            await EmitAsync(telemetry, new OrchestrationStreamEnvelope
-            {
-                Kind = OrchestrationStreamKind.ModelRoundCompleted,
-                Sequence = ++seq,
-                CorrelationId = session.CorrelationId,
-                RegistryKey = request.OrchestrationRegistryKey,
-                OrchestrationId = manifest.OrchestrationId,
-                SemanticVersion = manifest.SemanticVersion,
-                Attributes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                await EmitAsync(telemetry, new OrchestrationStreamEnvelope
                 {
-                    ["round"] = i.ToString(),
-                    ["cumulativeInputTokens"] = totalIn.ToString(),
-                    ["cumulativeOutputTokens"] = totalOut.ToString()
-                }
-            }, cancellationToken).ConfigureAwait(false);
+                    Kind = OrchestrationStreamKind.UsageUpdate,
+                    Sequence = ++seq,
+                    CorrelationId = session.CorrelationId,
+                    RegistryKey = request.OrchestrationRegistryKey,
+                    InputTokens = completion.InputTokens,
+                    OutputTokens = completion.OutputTokens
+                }, cancellationToken).ConfigureAwait(false);
+
+                await EmitAsync(telemetry, new OrchestrationStreamEnvelope
+                {
+                    Kind = OrchestrationStreamKind.ModelRoundCompleted,
+                    Sequence = ++seq,
+                    CorrelationId = session.CorrelationId,
+                    RegistryKey = request.OrchestrationRegistryKey,
+                    OrchestrationId = manifest.OrchestrationId,
+                    SemanticVersion = manifest.SemanticVersion,
+                    Attributes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["round"] = i.ToString(),
+                        ["cumulativeInputTokens"] = totalIn.ToString(),
+                        ["cumulativeOutputTokens"] = totalOut.ToString()
+                    }
+                }, cancellationToken).ConfigureAwait(false);
+            }
 
             if (completion.ToolCalls.Count > 0)
             {
@@ -168,26 +178,32 @@ public sealed class LayeredChatOrchestrator
                 appended.Add(assistantWithTools);
                 lastAssistantText = completion.TextContent;
 
-                await EmitAsync(telemetry, new OrchestrationStreamEnvelope
-                {
-                    Kind = OrchestrationStreamKind.AssistantMessageCommitted,
-                    Sequence = ++seq,
-                    CorrelationId = session.CorrelationId,
-                    RegistryKey = request.OrchestrationRegistryKey,
-                    AppendedMessage = assistantWithTools
-                }, cancellationToken).ConfigureAwait(false);
-
-                foreach (var call in completion.ToolCalls)
+                if (detailed)
                 {
                     await EmitAsync(telemetry, new OrchestrationStreamEnvelope
                     {
-                        Kind = OrchestrationStreamKind.ToolCallFinished,
+                        Kind = OrchestrationStreamKind.AssistantMessageCommitted,
                         Sequence = ++seq,
                         CorrelationId = session.CorrelationId,
                         RegistryKey = request.OrchestrationRegistryKey,
-                        ToolCall = call,
-                        ToolName = call.Name
+                        AppendedMessage = assistantWithTools
                     }, cancellationToken).ConfigureAwait(false);
+                }
+
+                foreach (var call in completion.ToolCalls)
+                {
+                    if (detailed)
+                    {
+                        await EmitAsync(telemetry, new OrchestrationStreamEnvelope
+                        {
+                            Kind = OrchestrationStreamKind.ToolCallFinished,
+                            Sequence = ++seq,
+                            CorrelationId = session.CorrelationId,
+                            RegistryKey = request.OrchestrationRegistryKey,
+                            ToolCall = call,
+                            ToolName = call.Name
+                        }, cancellationToken).ConfigureAwait(false);
+                    }
 
                     await EmitAsync(telemetry, new OrchestrationStreamEnvelope
                     {
@@ -240,14 +256,17 @@ public sealed class LayeredChatOrchestrator
             appended.Add(assistantFinal);
             lastAssistantText = completion.TextContent;
 
-            await EmitAsync(telemetry, new OrchestrationStreamEnvelope
+            if (detailed)
             {
-                Kind = OrchestrationStreamKind.AssistantMessageCommitted,
-                Sequence = ++seq,
-                CorrelationId = session.CorrelationId,
-                RegistryKey = request.OrchestrationRegistryKey,
-                AppendedMessage = assistantFinal
-            }, cancellationToken).ConfigureAwait(false);
+                await EmitAsync(telemetry, new OrchestrationStreamEnvelope
+                {
+                    Kind = OrchestrationStreamKind.AssistantMessageCommitted,
+                    Sequence = ++seq,
+                    CorrelationId = session.CorrelationId,
+                    RegistryKey = request.OrchestrationRegistryKey,
+                    AppendedMessage = assistantFinal
+                }, cancellationToken).ConfigureAwait(false);
+            }
 
             var (branch, evalMeta, nextSeq, evalEnvelopes) = await ProcessTurnContinuationAsync(
                 request,
@@ -311,8 +330,12 @@ public sealed class LayeredChatOrchestrator
         var manifest = prep.Manifest;
         var session = prep.Session;
         long seq = 0;
+        var detailed = TelemetryIsDetailed(request);
 
-        yield return Envelope(++seq, OrchestrationStreamKind.TurnStarted, session, request, manifest, null);
+        if (detailed)
+        {
+            yield return Envelope(++seq, OrchestrationStreamKind.TurnStarted, session, request, manifest, null);
+        }
 
         if (ShouldAttemptForward(request, manifest))
         {
@@ -334,19 +357,22 @@ public sealed class LayeredChatOrchestrator
             yield break;
         }
 
-        yield return new OrchestrationStreamEnvelope
+        if (detailed)
         {
-            Kind = OrchestrationStreamKind.ContextSlicesReady,
-            Sequence = ++seq,
-            CorrelationId = session.CorrelationId,
-            RegistryKey = request.OrchestrationRegistryKey,
-            OrchestrationId = manifest.OrchestrationId,
-            SemanticVersion = manifest.SemanticVersion,
-            Attributes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            yield return new OrchestrationStreamEnvelope
             {
-                ["sliceCount"] = prep.Slices.Count.ToString()
-            }
-        };
+                Kind = OrchestrationStreamKind.ContextSlicesReady,
+                Sequence = ++seq,
+                CorrelationId = session.CorrelationId,
+                RegistryKey = request.OrchestrationRegistryKey,
+                OrchestrationId = manifest.OrchestrationId,
+                SemanticVersion = manifest.SemanticVersion,
+                Attributes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["sliceCount"] = prep.Slices.Count.ToString()
+                }
+            };
+        }
 
         var appended = new List<ChatMessage>();
         var totalIn = 0;
@@ -364,8 +390,11 @@ public sealed class LayeredChatOrchestrator
         {
             var options = BuildConnectorOptions(request, manifest);
             var (roundTools, roundAllowed) = ResolveToolsForModelRound(round, prep, request);
-            yield return Envelope(++seq, OrchestrationStreamKind.ModelRoundStarted, session, request, manifest,
-                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["round"] = round.ToString() });
+            if (detailed)
+            {
+                yield return Envelope(++seq, OrchestrationStreamKind.ModelRoundStarted, session, request, manifest,
+                    new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["round"] = round.ToString() });
+            }
 
             LlmCompletionResult completion;
             if (_connector is IStreamingLlmChatConnector streaming &&
@@ -391,7 +420,7 @@ public sealed class LayeredChatOrchestrator
                         };
                     }
 
-                    if (frame.Kind == LlmStreamFrameKind.Usage)
+                    if (detailed && frame.Kind == LlmStreamFrameKind.Usage)
                     {
                         yield return new OrchestrationStreamEnvelope
                         {
@@ -430,31 +459,34 @@ public sealed class LayeredChatOrchestrator
             totalIn += completion.InputTokens;
             totalOut += completion.OutputTokens;
 
-            yield return new OrchestrationStreamEnvelope
+            if (detailed)
             {
-                Kind = OrchestrationStreamKind.UsageUpdate,
-                Sequence = ++seq,
-                CorrelationId = session.CorrelationId,
-                RegistryKey = request.OrchestrationRegistryKey,
-                InputTokens = completion.InputTokens,
-                OutputTokens = completion.OutputTokens
-            };
-
-            yield return new OrchestrationStreamEnvelope
-            {
-                Kind = OrchestrationStreamKind.ModelRoundCompleted,
-                Sequence = ++seq,
-                CorrelationId = session.CorrelationId,
-                RegistryKey = request.OrchestrationRegistryKey,
-                OrchestrationId = manifest.OrchestrationId,
-                SemanticVersion = manifest.SemanticVersion,
-                Attributes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                yield return new OrchestrationStreamEnvelope
                 {
-                    ["round"] = round.ToString(),
-                    ["cumulativeInputTokens"] = totalIn.ToString(),
-                    ["cumulativeOutputTokens"] = totalOut.ToString()
-                }
-            };
+                    Kind = OrchestrationStreamKind.UsageUpdate,
+                    Sequence = ++seq,
+                    CorrelationId = session.CorrelationId,
+                    RegistryKey = request.OrchestrationRegistryKey,
+                    InputTokens = completion.InputTokens,
+                    OutputTokens = completion.OutputTokens
+                };
+
+                yield return new OrchestrationStreamEnvelope
+                {
+                    Kind = OrchestrationStreamKind.ModelRoundCompleted,
+                    Sequence = ++seq,
+                    CorrelationId = session.CorrelationId,
+                    RegistryKey = request.OrchestrationRegistryKey,
+                    OrchestrationId = manifest.OrchestrationId,
+                    SemanticVersion = manifest.SemanticVersion,
+                    Attributes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["round"] = round.ToString(),
+                        ["cumulativeInputTokens"] = totalIn.ToString(),
+                        ["cumulativeOutputTokens"] = totalOut.ToString()
+                    }
+                };
+            }
 
             if (completion.ToolCalls.Count > 0)
             {
@@ -469,26 +501,32 @@ public sealed class LayeredChatOrchestrator
                 appended.Add(assistantWithTools);
                 lastAssistantText = completion.TextContent;
 
-                yield return new OrchestrationStreamEnvelope
-                {
-                    Kind = OrchestrationStreamKind.AssistantMessageCommitted,
-                    Sequence = ++seq,
-                    CorrelationId = session.CorrelationId,
-                    RegistryKey = request.OrchestrationRegistryKey,
-                    AppendedMessage = assistantWithTools
-                };
-
-                foreach (var call in completion.ToolCalls)
+                if (detailed)
                 {
                     yield return new OrchestrationStreamEnvelope
                     {
-                        Kind = OrchestrationStreamKind.ToolCallFinished,
+                        Kind = OrchestrationStreamKind.AssistantMessageCommitted,
                         Sequence = ++seq,
                         CorrelationId = session.CorrelationId,
                         RegistryKey = request.OrchestrationRegistryKey,
-                        ToolCall = call,
-                        ToolName = call.Name
+                        AppendedMessage = assistantWithTools
                     };
+                }
+
+                foreach (var call in completion.ToolCalls)
+                {
+                    if (detailed)
+                    {
+                        yield return new OrchestrationStreamEnvelope
+                        {
+                            Kind = OrchestrationStreamKind.ToolCallFinished,
+                            Sequence = ++seq,
+                            CorrelationId = session.CorrelationId,
+                            RegistryKey = request.OrchestrationRegistryKey,
+                            ToolCall = call,
+                            ToolName = call.Name
+                        };
+                    }
 
                     yield return new OrchestrationStreamEnvelope
                     {
@@ -541,14 +579,17 @@ public sealed class LayeredChatOrchestrator
             appended.Add(assistantFinal);
             lastAssistantText = completion.TextContent;
 
-            yield return new OrchestrationStreamEnvelope
+            if (detailed)
             {
-                Kind = OrchestrationStreamKind.AssistantMessageCommitted,
-                Sequence = ++seq,
-                CorrelationId = session.CorrelationId,
-                RegistryKey = request.OrchestrationRegistryKey,
-                AppendedMessage = assistantFinal
-            };
+                yield return new OrchestrationStreamEnvelope
+                {
+                    Kind = OrchestrationStreamKind.AssistantMessageCommitted,
+                    Sequence = ++seq,
+                    CorrelationId = session.CorrelationId,
+                    RegistryKey = request.OrchestrationRegistryKey,
+                    AppendedMessage = assistantFinal
+                };
+            }
 
             var (branch, evalMeta, nextSeqStream, evalEnvelopesStream) = await ProcessTurnContinuationAsync(
                 request,
@@ -644,13 +685,22 @@ public sealed class LayeredChatOrchestrator
         };
     }
 
+    private static bool TelemetryIsDetailed(LayeredChatTurnRequest request) =>
+        request.ConnectorOptions?.TelemetryVerbosity != OrchestrationTelemetryVerbosity.Minimal;
+
     private async Task EmitContextSlicesAsync(
         IOrchestrationTelemetry? telemetry,
         LayeredChatTurnRequest request,
         TurnPreparation prep,
+        bool detailed,
         long sequence,
         CancellationToken cancellationToken)
     {
+        if (!detailed)
+        {
+            return;
+        }
+
         await EmitAsync(telemetry, new OrchestrationStreamEnvelope
         {
             Kind = OrchestrationStreamKind.ContextSlicesReady,
@@ -847,7 +897,8 @@ public sealed class LayeredChatOrchestrator
             MaxOutputTokens = c?.MaxOutputTokens ?? adapter?.DefaultMaxOutputTokens,
             MaxToolRoundIterations = c?.MaxToolRoundIterations,
             ModelNameOverride = c?.ModelNameOverride,
-            AdapterProfile = adapter
+            AdapterProfile = adapter,
+            TelemetryVerbosity = c?.TelemetryVerbosity ?? OrchestrationTelemetryVerbosity.Normal
         };
     }
 

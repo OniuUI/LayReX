@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace LayeredChat;
 
 /// <summary>
@@ -11,7 +13,25 @@ public sealed class DictionaryToolCatalog : IToolCatalog
     {
         ArgumentNullException.ThrowIfNull(tools);
         nameComparer ??= StringComparer.Ordinal;
-        _tools = tools.ToDictionary(t => t.Name, nameComparer);
+        _tools = tools.Select(WithEmbeddedParametersSchema).ToDictionary(t => t.Name, nameComparer);
+    }
+
+    private static ToolDefinition WithEmbeddedParametersSchema(ToolDefinition t)
+    {
+        if (t.ParametersSchema.HasValue)
+        {
+            return t;
+        }
+
+        var json = string.IsNullOrWhiteSpace(t.ParametersSchemaJson) ? "{}" : t.ParametersSchemaJson.Trim();
+        using var doc = JsonDocument.Parse(json);
+        return new ToolDefinition
+        {
+            Name = t.Name,
+            Description = t.Description,
+            ParametersSchemaJson = t.ParametersSchemaJson,
+            ParametersSchema = doc.RootElement.Clone()
+        };
     }
 
     public bool TryGet(string name, out ToolDefinition? definition)
