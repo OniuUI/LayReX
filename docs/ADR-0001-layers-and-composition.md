@@ -28,4 +28,4 @@ This ADR defines terminology and where composition lives so we do not conflate:
 ## Consequences
 
 - Hosts and tools (CLI, VersionHost) resolve references → contributions; Core stays free of storage and network.
-- Boligsektor and other products remain consumers; no product domains belong in `LayeredChat.Core`.
+- Downstream hosts and products remain consumers; no product domains belong in `LayeredChat.Core`.
