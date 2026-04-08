@@ -21,7 +21,8 @@ public static class OrchestrationForwardMapping
                     Temperature = request.ConnectorOptions.Temperature,
                     MaxOutputTokens = request.ConnectorOptions.MaxOutputTokens,
                     MaxToolRoundIterations = request.ConnectorOptions.MaxToolRoundIterations,
-                    ModelNameOverride = request.ConnectorOptions.ModelNameOverride
+                    ModelNameOverride = request.ConnectorOptions.ModelNameOverride,
+                    TelemetryVerbosity = request.ConnectorOptions.TelemetryVerbosity
                 }
         };
     }
@@ -42,7 +43,8 @@ public static class OrchestrationForwardMapping
                     Temperature = dto.ConnectorOptions.Temperature,
                     MaxOutputTokens = dto.ConnectorOptions.MaxOutputTokens,
                     MaxToolRoundIterations = dto.ConnectorOptions.MaxToolRoundIterations,
-                    ModelNameOverride = dto.ConnectorOptions.ModelNameOverride
+                    ModelNameOverride = dto.ConnectorOptions.ModelNameOverride,
+                    TelemetryVerbosity = dto.ConnectorOptions.TelemetryVerbosity
                 }
         };
     }
