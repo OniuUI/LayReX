@@ -42,7 +42,7 @@ public sealed class OpenAiCompatibleChatConnector : IStreamingLlmChatConnector
         AddAuth(request);
 
         using var response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessStatusCodeWithBodyAsync(response, cancellationToken).ConfigureAwait(false);
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
         return ParseNonStreaming(doc.RootElement);
@@ -66,7 +66,7 @@ public sealed class OpenAiCompatibleChatConnector : IStreamingLlmChatConnector
                 cancellationToken)
             .ConfigureAwait(false);
 
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessStatusCodeWithBodyAsync(response, cancellationToken).ConfigureAwait(false);
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         using var reader = new StreamReader(stream);
         while (!reader.EndOfStream)
@@ -143,7 +143,7 @@ public sealed class OpenAiCompatibleChatConnector : IStreamingLlmChatConnector
 
         if (options.MaxOutputTokens is { } max)
         {
-            body["max_tokens"] = max;
+            body[UseMaxCompletionTokensField(model) ? "max_completion_tokens" : "max_tokens"] = max;
         }
 
         if (tools.Count > 0)
@@ -167,6 +167,25 @@ public sealed class OpenAiCompatibleChatConnector : IStreamingLlmChatConnector
         }
 
         return body;
+    }
+
+    private static bool UseMaxCompletionTokensField(string model) =>
+        !string.IsNullOrWhiteSpace(model)
+        && model.Contains("claude", StringComparison.OrdinalIgnoreCase);
+
+    private static async Task EnsureSuccessStatusCodeWithBodyAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        if (response.IsSuccessStatusCode)
+            return;
+
+        var body = response.Content == null
+            ? string.Empty
+            : await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        body = string.IsNullOrWhiteSpace(body) ? "(empty response body)" : body.Trim();
+        throw new HttpRequestException(
+            $"Response status code {(int)response.StatusCode} ({response.ReasonPhrase}) from OpenAI-compatible connector. Body: {body}",
+            null,
+            response.StatusCode);
     }
 
     private static object MapMessage(ChatMessage m)
