@@ -211,7 +211,8 @@ public sealed class LayeredChatOrchestrator
                         Sequence = ++seq,
                         CorrelationId = session.CorrelationId,
                         RegistryKey = request.OrchestrationRegistryKey,
-                        ToolName = call.Name
+                        ToolName = call.Name,
+                        ToolCall = call
                     }, cancellationToken).ConfigureAwait(false);
 
                     var exec = await ExecuteToolAsync(call, roundAllowed, request.OrchestrationRegistryKey, session, cancellationToken)
@@ -534,7 +535,8 @@ public sealed class LayeredChatOrchestrator
                         Sequence = ++seq,
                         CorrelationId = session.CorrelationId,
                         RegistryKey = request.OrchestrationRegistryKey,
-                        ToolName = call.Name
+                        ToolName = call.Name,
+                        ToolCall = call
                     };
 
                     var exec = await ExecuteToolAsync(call, roundAllowed, request.OrchestrationRegistryKey, session, cancellationToken)
