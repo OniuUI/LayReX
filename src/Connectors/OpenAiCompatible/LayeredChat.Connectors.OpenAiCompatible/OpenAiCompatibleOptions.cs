@@ -7,7 +7,7 @@ public sealed class OpenAiCompatibleOptions
 {
     public Uri BaseUri { get; init; } = new("https://api.openai.com/v1/");
 
-    public string Model { get; init; } = "gpt-4o-mini";
+    public string Model { get; init; } = "gpt-4.1";
 
     public string? ApiKey { get; init; }
 

@@ -39,6 +39,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LayeredChat.ControlPlane", 
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LayReX.ControlPlane.Client", "src\ControlPlane\LayReX.ControlPlane.Client\LayReX.ControlPlane.Client.csproj", "{BFFDCA6F-0CA0-492D-A13B-A18EBBD9A151}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "AnthropicNative", "AnthropicNative", "{C56A4FA3-7335-96CE-D65E-6F2A358BECFE}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LayeredChat.Connectors.AnthropicNative", "src\Connectors\AnthropicNative\LayeredChat.Connectors.AnthropicNative\LayeredChat.Connectors.AnthropicNative.csproj", "{87609652-DD9C-4A26-A141-DB892D3668C2}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -181,6 +185,18 @@ Global
 		{BFFDCA6F-0CA0-492D-A13B-A18EBBD9A151}.Release|x64.Build.0 = Release|Any CPU
 		{BFFDCA6F-0CA0-492D-A13B-A18EBBD9A151}.Release|x86.ActiveCfg = Release|Any CPU
 		{BFFDCA6F-0CA0-492D-A13B-A18EBBD9A151}.Release|x86.Build.0 = Release|Any CPU
+		{87609652-DD9C-4A26-A141-DB892D3668C2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{87609652-DD9C-4A26-A141-DB892D3668C2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{87609652-DD9C-4A26-A141-DB892D3668C2}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{87609652-DD9C-4A26-A141-DB892D3668C2}.Debug|x64.Build.0 = Debug|Any CPU
+		{87609652-DD9C-4A26-A141-DB892D3668C2}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{87609652-DD9C-4A26-A141-DB892D3668C2}.Debug|x86.Build.0 = Debug|Any CPU
+		{87609652-DD9C-4A26-A141-DB892D3668C2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{87609652-DD9C-4A26-A141-DB892D3668C2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{87609652-DD9C-4A26-A141-DB892D3668C2}.Release|x64.ActiveCfg = Release|Any CPU
+		{87609652-DD9C-4A26-A141-DB892D3668C2}.Release|x64.Build.0 = Release|Any CPU
+		{87609652-DD9C-4A26-A141-DB892D3668C2}.Release|x86.ActiveCfg = Release|Any CPU
+		{87609652-DD9C-4A26-A141-DB892D3668C2}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -190,5 +206,7 @@ Global
 		{446D8F33-C73B-BF73-CF50-6948B082F41B} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{8A620B53-502D-419B-98EF-B47FEC65C7F4} = {446D8F33-C73B-BF73-CF50-6948B082F41B}
 		{BFFDCA6F-0CA0-492D-A13B-A18EBBD9A151} = {446D8F33-C73B-BF73-CF50-6948B082F41B}
+		{C56A4FA3-7335-96CE-D65E-6F2A358BECFE} = {F1E2D3C4-B5A6-4789-9012-3456789ABCDE}
+		{87609652-DD9C-4A26-A141-DB892D3668C2} = {C56A4FA3-7335-96CE-D65E-6F2A358BECFE}
 	EndGlobalSection
 EndGlobal
