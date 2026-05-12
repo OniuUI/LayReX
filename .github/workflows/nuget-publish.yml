@@ -117,9 +117,9 @@ jobs:
             exit 1
           fi
           shopt -s nullglob
-          for f in "${GITHUB_WORKSPACE}"/artifacts/*.nupkg; do
+          for f in "${GITHUB_WORKSPACE}"/artifacts/LayeredChat*.nupkg; do
             dotnet nuget push "$f" --api-key "${NUGET_API_KEY}" --source https://api.nuget.org/v3/index.json --skip-duplicate
           done
-          for f in "${GITHUB_WORKSPACE}"/artifacts/*.snupkg; do
+          for f in "${GITHUB_WORKSPACE}"/artifacts/LayeredChat*.snupkg; do
             dotnet nuget push "$f" --api-key "${NUGET_API_KEY}" --source https://api.nuget.org/v3/index.json --skip-duplicate
           done
