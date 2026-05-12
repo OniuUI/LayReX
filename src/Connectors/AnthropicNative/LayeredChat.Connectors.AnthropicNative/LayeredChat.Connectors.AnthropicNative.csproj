@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <RootNamespace>LayeredChat.Connectors.AnthropicNative</RootNamespace>
+    <AssemblyName>LayeredChat.Connectors.AnthropicNative</AssemblyName>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
+    <PackageId>LayeredChat.Connectors.AnthropicNative</PackageId>
+    <Description>Anthropic-native HTTP connector (sync + SSE streaming) for LayeredChat.Core.</Description>
+    <PackageTags>llm;anthropic;claude;layeredchat</PackageTags>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\Core\LayeredChat.Core\LayeredChat.Core.csproj" />
+  </ItemGroup>
+
+</Project>
