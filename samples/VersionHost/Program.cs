@@ -69,7 +69,7 @@ var baseUrl = builder.Configuration["OPENAI_COMPATIBLE_BASE_URL"]
               ?? "https://api.openai.com/v1/";
 var model = builder.Configuration["OPENAI_COMPATIBLE_MODEL"]
             ?? Environment.GetEnvironmentVariable("OPENAI_COMPATIBLE_MODEL")
-            ?? "gpt-4o-mini";
+            ?? "gpt-4.1";
 var apiKey = builder.Configuration["OPENAI_API_KEY"] ?? Environment.GetEnvironmentVariable("OPENAI_API_KEY") ?? "";
 
 builder.Services.AddSingleton(registry);
