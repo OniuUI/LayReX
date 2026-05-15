@@ -7,6 +7,8 @@ public sealed class LlmCompletionResult
 {
     public string? TextContent { get; init; }
 
+    public string? ReasoningContent { get; init; }
+
     public IReadOnlyList<ToolCallRequest> ToolCalls { get; init; } = [];
 
     public int InputTokens { get; init; }

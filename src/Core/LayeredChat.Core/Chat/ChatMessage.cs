@@ -9,6 +9,8 @@ public sealed class ChatMessage
 
     public string Content { get; init; } = string.Empty;
 
+    public string? ReasoningContent { get; init; }
+
     public string? ToolCallId { get; init; }
 
     public string? ToolName { get; init; }

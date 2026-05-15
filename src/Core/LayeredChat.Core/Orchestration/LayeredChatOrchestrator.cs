@@ -171,6 +171,7 @@ public sealed class LayeredChatOrchestrator
                 {
                     Role = ChatRole.Assistant,
                     Content = completion.TextContent ?? string.Empty,
+                    ReasoningContent = completion.ReasoningContent,
                     ToolCalls = completion.ToolCalls
                 };
 
@@ -250,7 +251,8 @@ public sealed class LayeredChatOrchestrator
             var assistantFinal = new ChatMessage
             {
                 Role = ChatRole.Assistant,
-                Content = completion.TextContent ?? string.Empty
+                Content = completion.TextContent ?? string.Empty,
+                ReasoningContent = completion.ReasoningContent
             };
 
             prep.Working.Add(assistantFinal);
@@ -495,6 +497,7 @@ public sealed class LayeredChatOrchestrator
                 {
                     Role = ChatRole.Assistant,
                     Content = completion.TextContent ?? string.Empty,
+                    ReasoningContent = completion.ReasoningContent,
                     ToolCalls = completion.ToolCalls
                 };
 
@@ -574,7 +577,8 @@ public sealed class LayeredChatOrchestrator
             var assistantFinal = new ChatMessage
             {
                 Role = ChatRole.Assistant,
-                Content = completion.TextContent ?? string.Empty
+                Content = completion.TextContent ?? string.Empty,
+                ReasoningContent = completion.ReasoningContent
             };
 
             prep.Working.Add(assistantFinal);
