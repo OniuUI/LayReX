@@ -8,6 +8,7 @@ namespace LayeredChat;
 public sealed class LlmStreamAccumulatorSession
 {
     private readonly StringBuilder _text = new();
+    private readonly StringBuilder _reasoning = new();
     private readonly Dictionary<int, ToolAccumulator> _byIndex = new();
     private int _inputTokens;
     private int _outputTokens;
@@ -29,6 +30,13 @@ public sealed class LlmStreamAccumulatorSession
                 if (!string.IsNullOrEmpty(frame.TextDelta))
                 {
                     _text.Append(frame.TextDelta);
+                }
+
+                break;
+            case LlmStreamFrameKind.ReasoningDelta:
+                if (!string.IsNullOrEmpty(frame.ReasoningDelta))
+                {
+                    _reasoning.Append(frame.ReasoningDelta);
                 }
 
                 break;
@@ -111,6 +119,7 @@ public sealed class LlmStreamAccumulatorSession
         return new LlmCompletionResult
         {
             TextContent = _text.Length > 0 ? _text.ToString() : null,
+            ReasoningContent = _reasoning.Length > 0 ? _reasoning.ToString() : null,
             ToolCalls = toolCalls,
             InputTokens = _inputTokens,
             OutputTokens = _outputTokens

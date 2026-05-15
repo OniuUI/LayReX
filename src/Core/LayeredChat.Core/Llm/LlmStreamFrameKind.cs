@@ -8,6 +8,7 @@ public enum LlmStreamFrameKind
     TextDelta,
     ToolCallMeta,
     ToolArgumentsDelta,
+    ReasoningDelta,
     Usage,
     Completed
 }

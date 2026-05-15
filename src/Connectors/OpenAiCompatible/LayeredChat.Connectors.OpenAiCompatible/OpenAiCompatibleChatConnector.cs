@@ -203,6 +203,11 @@ public sealed class OpenAiCompatibleChatConnector : IStreamingLlmChatConnector
                     d["content"] = m.Content;
                 }
 
+                if (!string.IsNullOrEmpty(m.ReasoningContent))
+                {
+                    d["reasoning_content"] = m.ReasoningContent;
+                }
+
                 if (m.ToolCalls is { Count: > 0 } tc)
                 {
                     var toolCallObjs = new List<object>(tc.Count);
@@ -240,6 +245,7 @@ public sealed class OpenAiCompatibleChatConnector : IStreamingLlmChatConnector
     private static LlmCompletionResult ParseNonStreaming(JsonElement root)
     {
         var text = string.Empty;
+        var reasoning = string.Empty;
         var toolCalls = new List<ToolCallRequest>();
         var input = 0;
         var output = 0;
@@ -285,6 +291,11 @@ public sealed class OpenAiCompatibleChatConnector : IStreamingLlmChatConnector
             text = contentEl.GetString() ?? string.Empty;
         }
 
+        if (message.TryGetProperty("reasoning_content", out var reasoningEl) && reasoningEl.ValueKind == JsonValueKind.String)
+        {
+            reasoning = reasoningEl.GetString() ?? string.Empty;
+        }
+
         if (message.TryGetProperty("tool_calls", out var tcEl) && tcEl.ValueKind == JsonValueKind.Array)
         {
             foreach (var el in tcEl.EnumerateArray())
@@ -306,6 +317,7 @@ public sealed class OpenAiCompatibleChatConnector : IStreamingLlmChatConnector
         return new LlmCompletionResult
         {
             TextContent = string.IsNullOrEmpty(text) ? null : text,
+            ReasoningContent = string.IsNullOrEmpty(reasoning) ? null : reasoning,
             ToolCalls = toolCalls,
             InputTokens = input,
             OutputTokens = output
@@ -323,6 +335,15 @@ public sealed class OpenAiCompatibleChatConnector : IStreamingLlmChatConnector
         if (!choice.TryGetProperty("delta", out var delta))
         {
             yield break;
+        }
+
+        if (delta.TryGetProperty("reasoning_content", out var rc) && rc.ValueKind == JsonValueKind.String)
+        {
+            var rs = rc.GetString();
+            if (!string.IsNullOrEmpty(rs))
+            {
+                yield return new LlmStreamFrame { Kind = LlmStreamFrameKind.ReasoningDelta, ReasoningDelta = rs };
+            }
         }
 
         if (delta.TryGetProperty("content", out var c) && c.ValueKind == JsonValueKind.String)

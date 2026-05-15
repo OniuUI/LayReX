@@ -55,6 +55,7 @@ public static class OrchestrationForwardMapping
         {
             Role = m.Role,
             Content = m.Content,
+            ReasoningContent = m.ReasoningContent,
             ToolCallId = m.ToolCallId,
             ToolName = m.ToolName,
             ToolCalls = m.ToolCalls?.Select(tc => new ToolCallRequestDto
@@ -72,6 +73,7 @@ public static class OrchestrationForwardMapping
         {
             Role = dto.Role,
             Content = dto.Content,
+            ReasoningContent = dto.ReasoningContent,
             ToolCallId = dto.ToolCallId,
             ToolName = dto.ToolName,
             ToolCalls = dto.ToolCalls?.Select(tc => new ToolCallRequest

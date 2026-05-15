@@ -9,6 +9,8 @@ public sealed class LlmStreamFrame
 
     public string? TextDelta { get; init; }
 
+    public string? ReasoningDelta { get; init; }
+
     public int? ToolIndex { get; init; }
 
     public string? ToolCallId { get; init; }
