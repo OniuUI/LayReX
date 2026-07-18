@@ -127,10 +127,22 @@ public sealed class OpenAiCompatibleChatConnector : IStreamingLlmChatConnector
         LlmRequestOptions options,
         bool stream)
     {
+        var schemaMode = options.ResponseSchema?.ResolveMode(
+            options.AdapterProfile, ResponseSchemaMode.NativeJsonSchema);
+
         var msgObjs = new List<object>(messages.Count);
         foreach (var message in messages)
         {
             msgObjs.Add(MapMessage(message));
+        }
+
+        if (options.ResponseSchema is { } promptedSchema && schemaMode == ResponseSchemaMode.PromptedJson)
+        {
+            msgObjs.Add(new Dictionary<string, object?>
+            {
+                ["role"] = "system",
+                ["content"] = BuildPromptedJsonInstruction(promptedSchema)
+            });
         }
 
         var body = new Dictionary<string, object?>
@@ -146,27 +158,78 @@ public sealed class OpenAiCompatibleChatConnector : IStreamingLlmChatConnector
             body[UseMaxCompletionTokensField(model) ? "max_completion_tokens" : "max_tokens"] = max;
         }
 
-        if (tools.Count > 0)
+        var toolObjs = new List<object>(tools.Count + 1);
+        foreach (var t in tools)
         {
-            var toolObjs = new List<object>(tools.Count);
-            foreach (var t in tools)
+            toolObjs.Add(new Dictionary<string, object?>
             {
-                toolObjs.Add(new Dictionary<string, object?>
+                ["type"] = "function",
+                ["function"] = new Dictionary<string, object?>
                 {
-                    ["type"] = "function",
-                    ["function"] = new Dictionary<string, object?>
-                    {
-                        ["name"] = t.Name,
-                        ["description"] = t.Description,
-                        ["parameters"] = t.ResolveParametersElement()
-                    }
-                });
-            }
+                    ["name"] = t.Name,
+                    ["description"] = t.Description,
+                    ["parameters"] = t.ResolveParametersElement()
+                }
+            });
+        }
 
+        if (options.ResponseSchema is { } schema)
+        {
+            switch (schemaMode)
+            {
+                case ResponseSchemaMode.NativeJsonSchema:
+                    body["response_format"] = new Dictionary<string, object?>
+                    {
+                        ["type"] = "json_schema",
+                        ["json_schema"] = new Dictionary<string, object?>
+                        {
+                            ["name"] = schema.SanitizedSchemaName(),
+                            ["strict"] = schema.Strict,
+                            ["schema"] = schema.ResolveSchemaElement()
+                        }
+                    };
+                    break;
+                case ResponseSchemaMode.ForcedTool:
+                    toolObjs.Add(new Dictionary<string, object?>
+                    {
+                        ["type"] = "function",
+                        ["function"] = new Dictionary<string, object?>
+                        {
+                            ["name"] = ResponseSchemaSpec.EmitToolName,
+                            ["description"] = "Emit the final answer conforming to the required schema. " +
+                                              "Call this exactly once when the task is complete.",
+                            ["parameters"] = schema.ResolveSchemaElement()
+                        }
+                    });
+                    if (tools.Count == 0)
+                    {
+                        body["tool_choice"] = new Dictionary<string, object?>
+                        {
+                            ["type"] = "function",
+                            ["function"] = new Dictionary<string, object?>
+                            {
+                                ["name"] = ResponseSchemaSpec.EmitToolName
+                            }
+                        };
+                    }
+
+                    break;
+            }
+        }
+
+        if (toolObjs.Count > 0)
+        {
             body["tools"] = toolObjs;
         }
 
         return body;
+    }
+
+    private static string BuildPromptedJsonInstruction(ResponseSchemaSpec schema)
+    {
+        return "Respond ONLY with a single JSON object conforming to this JSON Schema. " +
+               "No markdown fences, no prose before or after.\n" +
+               schema.SchemaJson;
     }
 
     private static bool UseMaxCompletionTokensField(string model) =>

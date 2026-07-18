@@ -24,13 +24,20 @@
 
 | You need | LayeredChat gives you |
 |----------|------------------------|
-| **Versioned “personalities”** without copy-pasting prompts | `OrchestrationProfileManifest` + registry keys (`OrchestrationRegistryKeys.Compose`) |
+| **Versioned "personalities"** without copy-pasting prompts | `OrchestrationProfileManifest` + registry keys (`OrchestrationRegistryKeys.Compose`) |
 | **Swap models** (OpenAI, Azure, Ollama, MEAI, …) | `ILlmChatConnector`, `OpenAiCompatible`, `ExtensionsAiChatConnector` |
 | **RAG / SQL / vectors** as first-class context | `IDataSourceProvider` + PostgreSQL, MongoDB, Qdrant packages |
 | **SSE / buses / gateways** | `RunTurnStreamingAsync` → `OrchestrationStreamEnvelope` |
 | **Remote version pods** | `ExternalForwardUri` + `HttpOrchestrationForwarder` + [VersionHost](samples/VersionHost) |
 | **Composed orchestration layers** | `LayerStackManifest`, `LayerContribution`, `ILayerCompositionService`; see [docs/LAYER_PACKAGE_FORMAT.md](docs/LAYER_PACKAGE_FORMAT.md) |
 | **Optional layer registry + CLI** | [LayeredChat.ControlPlane](src/ControlPlane/LayeredChat.ControlPlane), [LayReX.ControlPlane.Client](src/ControlPlane/LayReX.ControlPlane.Client), [LayReX-CLI](../LayReX-CLI/README.md) |
+| **Subagent dispatch** with fresh context, scoped tool surfaces, depth guard | `SubAgentDefinition`, `dispatch_agent` tool, `UseSubAgents()` on the host builder |
+| **Skills with progressive disclosure** | `IKnowledgeSkillRegistry`, `load_skill` tool, index rendering, `UseSkills()` |
+| **Tool lifecycle hooks** (allow/deny/rewrite, audit, error capture) | `ToolLifecycleHooks` (`PreToolUse`, `PostToolUse`, `PostToolUseFailure`) on `OrchestrationExecutionHooks` |
+| **Permission gate** for per-call tool governance | `IToolPermissionGate`, wire via `ToolLifecycleHooks.ForPermissionGate(gate)` |
+| **Structured output** (schema-enforced model responses) | `ResponseSchemaSpec` with degradation ladder: native JSON-schema → forced emit tool → prompted JSON |
+| **Parallel tool execution** for independent read-only calls | `ToolDefinition.IsReadOnly` — contiguous read-only calls in one round run concurrently |
+| **Transient tool failure retry** | `ToolFailureKind.Transient` — the orchestrator retries once silently before surfacing |
 
 ---
 
@@ -79,6 +86,8 @@ var host = LayeredChatHost.CreateBuilder()
     .UseDefinitions(orchestrationDefinition)      // or .UseDefinitionRegistry(myRegistry)
     .UseTools(myToolCatalog, myToolExecutor)      // optional; defaults to no tools
     .UseDataSources(myDataSourceRegistry)        // optional; defaults to empty
+    .UseSubAgents(mySubAgents, dispatchOptions)  // optional: dispatch_agent tool
+    .UseSkills(mySkillRegistry)                  // optional: load_skill tool
     .Build();
 
 var result = await host.RunTurnAsync(new LayeredChatTurnRequest { /* ... */ });
@@ -152,6 +161,145 @@ var result = await orchestrator.RunTurnAsync(new LayeredChatTurnRequest
 - **`IChatAgent`** — fixed `OrchestrationRegistryKey` with `RunTurnAsync` / `RunTurnStreamingAsync` over `AgentTurnInput` (no key on each call).
 - **`LayeredChatAgent`** — thin wrapper over `LayeredChatOrchestrator`.
 - **`LayeredChatAgentRegistry`** — register many agents (e.g. `sales`, `support`) on one orchestrator.
+
+## Subagent dispatch
+
+Delegate work to specialists with scoped tool surfaces and fresh context:
+
+```csharp
+var host = LayeredChatHost.CreateBuilder()
+    .UseConnector(connector)
+    .UseDefinitions(manifest)
+    .UseTools(toolCatalog, toolExecutor)
+    .UseSubAgents(
+    [
+        new SubAgentDefinition
+        {
+            Name = "property-scout",
+            Description = "Finds and filters property listings from Finn.no",
+            OrchestrationRegistryKey = "bs.harness.property-scout@2.0.0",
+            SystemInstructionText = "You find properties. Never invent listings."
+        }
+    ],
+    new SubAgentDispatchOptions
+    {
+        MaxDispatchDepth = 1,
+        StreamChildEnvelope = (envelope, ct) =>
+        {
+            // forward child text deltas and tool events to your SSE channel
+            return ValueTask.CompletedTask;
+        }
+    })
+    .Build();
+```
+
+The parent model calls `dispatch_agent("property-scout", "find apartments in Oslo", "budget 4M")`. The child runs in a nested orchestration with only its manifest's allowed tools. The `StreamChildEnvelope` callback streams child progress in real time.
+
+## Skills (progressive disclosure)
+
+Define knowledge packages as `KnowledgeSkillDefinition` objects and register them:
+
+```csharp
+var registry = new InMemoryKnowledgeSkillRegistry(
+[
+    new KnowledgeSkillDefinition
+    {
+        Name = "finn-search-strategy",
+        Description = "Effective Finn.no searches, zero-result recovery ladder.",
+        BodyMarkdown = "## Parameter construction\n- Location: prefer municipality codes..."
+    }
+]);
+
+var host = LayeredChatHost.CreateBuilder()
+    // ...
+    .UseSkills(registry)
+    .Build();
+```
+
+The orchestrator renders a "## Available skills" index block into the system prompt (names + one-liners only). The model calls `load_skill("finn-search-strategy")` to inject the full body on demand — context stays lean while knowledge is comprehensive.
+
+## Tool lifecycle hooks
+
+Intercept every tool call for permission gating, audit, or argument rewriting:
+
+```csharp
+var hooks = new OrchestrationExecutionHooks
+{
+    ToolLifecycle = new ToolLifecycleHooks
+    {
+        PreToolUse = (ctx, ct) =>
+        {
+            if (ctx.Call.Name == "unsafe_tool")
+                return ValueTask.FromResult(PreToolUseDecision.Deny("governance"));
+            return ValueTask.FromResult(PreToolUseDecision.Allow());
+        },
+        PostToolUseFailure = (ctx, ct) =>
+        {
+            logger.LogWarning("Tool {Tool} failed: {Summary}", ctx.Call.Name, ctx.Result.SummaryText);
+            return ValueTask.CompletedTask;
+        }
+    }
+};
+
+var request = new LayeredChatTurnRequest
+{
+    OrchestrationRegistryKey = "...",
+    UserMessageContent = "go",
+    Hooks = hooks
+};
+```
+
+Wire a `IToolPermissionGate` through `ToolLifecycleHooks.ForPermissionGate(gate)` for DI-friendly patterns.
+
+## Structured output
+
+Enforce JSON-schema-constrained model responses with automatic degradation:
+
+```csharp
+var request = new LayeredChatTurnRequest
+{
+    // ...
+    ConnectorOptions = new LlmRequestOptions
+    {
+        ResponseSchema = new ResponseSchemaSpec
+        {
+            SchemaName = "grounded-answer@1",
+            SchemaJson = "{\"type\":\"object\",\"required\":[\"answer\",\"refs\"],\"properties\":{...}}",
+            Mode = ResponseSchemaMode.Auto  // picks the strongest mechanism per connector
+        }
+    }
+};
+```
+
+The orchestrator folds the synthetic `emit_result` tool call back into `LlmCompletionResult.TextContent` transparently. Supported modes: `NativeJsonSchema` (OpenAI `response_format`, Gemini `responseSchema`), `ForcedTool` (Anthropic `tool_choice`), `PromptedJson` (fallback with parse+retry).
+
+## Parallel tool execution
+
+Mark tools as read-only and the orchestrator runs consecutive read-only calls concurrently:
+
+```csharp
+new ToolDefinition
+{
+    Name = "get_property_pois",
+    IsReadOnly = true  // safe to run in parallel with other read-only tools
+}
+```
+
+Mutation tools (`IsReadOnly = false`) always execute sequentially. The orchestrator partitions each round's tool calls into read-only groups and mutation singletons, executing groups via `Task.WhenAll`.
+
+## Transient failure retry
+
+Tool implementations set `FailureKind = Transient` for temporary conditions (timeouts, rate limits). The orchestrator retries the same call once silently before surfacing the failure to the model:
+
+```csharp
+return new ToolExecutionResult
+{
+    Success = false,
+    FailureKind = ToolFailureKind.Transient,
+    SummaryText = "upstream timeout"
+};
+```
+`Invalid` and `Fatal` failures are surfaced immediately. Executor exceptions are captured as `Fatal` with the exception message.
 
 ## Model Context Protocol (MCP)
 

@@ -132,6 +132,7 @@ public sealed class LayeredChatOrchestrator
             var completion = await _connector
                 .CompleteAsync(prep.Working, roundTools, options, cancellationToken)
                 .ConfigureAwait(false);
+            completion = FoldStructuredEmitToolCall(completion, options);
 
             totalIn += completion.InputTokens;
             totalOut += completion.OutputTokens;
@@ -205,44 +206,56 @@ public sealed class LayeredChatOrchestrator
                             ToolName = call.Name
                         }, cancellationToken).ConfigureAwait(false);
                     }
+                }
 
-                    await EmitAsync(telemetry, new OrchestrationStreamEnvelope
+                foreach (var group in GroupToolCallsForExecution(completion.ToolCalls))
+                {
+                    foreach (var call in group)
                     {
-                        Kind = OrchestrationStreamKind.ToolExecutionStarted,
-                        Sequence = ++seq,
-                        CorrelationId = session.CorrelationId,
-                        RegistryKey = request.OrchestrationRegistryKey,
-                        ToolName = call.Name,
-                        ToolCall = call
-                    }, cancellationToken).ConfigureAwait(false);
+                        await EmitAsync(telemetry, new OrchestrationStreamEnvelope
+                        {
+                            Kind = OrchestrationStreamKind.ToolExecutionStarted,
+                            Sequence = ++seq,
+                            CorrelationId = session.CorrelationId,
+                            RegistryKey = request.OrchestrationRegistryKey,
+                            ToolName = call.Name,
+                            ToolCall = call
+                        }, cancellationToken).ConfigureAwait(false);
+                    }
 
-                    var exec = await ExecuteToolAsync(call, roundAllowed, request.OrchestrationRegistryKey, session, cancellationToken)
+                    var execResults = await ExecuteToolGroupAsync(
+                            group, roundAllowed, request, session, i, cancellationToken)
                         .ConfigureAwait(false);
 
-                    await EmitAsync(telemetry, new OrchestrationStreamEnvelope
+                    for (var gi = 0; gi < group.Count; gi++)
                     {
-                        Kind = OrchestrationStreamKind.ToolExecutionFinished,
-                        Sequence = ++seq,
-                        CorrelationId = session.CorrelationId,
-                        RegistryKey = request.OrchestrationRegistryKey,
-                        ToolName = call.Name,
-                        ToolResult = exec
-                    }, cancellationToken).ConfigureAwait(false);
+                        var call = group[gi];
+                        var exec = execResults[gi];
+                        await EmitAsync(telemetry, new OrchestrationStreamEnvelope
+                        {
+                            Kind = OrchestrationStreamKind.ToolExecutionFinished,
+                            Sequence = ++seq,
+                            CorrelationId = session.CorrelationId,
+                            RegistryKey = request.OrchestrationRegistryKey,
+                            ToolName = call.Name,
+                            ToolResult = exec
+                        }, cancellationToken).ConfigureAwait(false);
 
-                    var toolBody = exec.StructuredPayloadJson is { Length: > 0 }
-                        ? $"{exec.SummaryText}\n\n{exec.StructuredPayloadJson}"
-                        : exec.SummaryText;
+                        var toolBody = exec.StructuredPayloadJson is { Length: > 0 }
+                            ? $"{exec.SummaryText}\n\n{exec.StructuredPayloadJson}"
+                            : exec.SummaryText;
 
-                    var toolMessage = new ChatMessage
-                    {
-                        Role = ChatRole.Tool,
-                        ToolCallId = call.CallId,
-                        ToolName = call.Name,
-                        Content = toolBody
-                    };
+                        var toolMessage = new ChatMessage
+                        {
+                            Role = ChatRole.Tool,
+                            ToolCallId = call.CallId,
+                            ToolName = call.Name,
+                            Content = toolBody
+                        };
 
-                    prep.Working.Add(toolMessage);
-                    appended.Add(toolMessage);
+                        prep.Working.Add(toolMessage);
+                        appended.Add(toolMessage);
+                    }
                 }
 
                 continue;
@@ -461,6 +474,7 @@ public sealed class LayeredChatOrchestrator
 
             totalIn += completion.InputTokens;
             totalOut += completion.OutputTokens;
+            completion = FoldStructuredEmitToolCall(completion, options);
 
             if (detailed)
             {
@@ -531,44 +545,56 @@ public sealed class LayeredChatOrchestrator
                             ToolName = call.Name
                         };
                     }
+                }
 
-                    yield return new OrchestrationStreamEnvelope
+                foreach (var group in GroupToolCallsForExecution(completion.ToolCalls))
+                {
+                    foreach (var call in group)
                     {
-                        Kind = OrchestrationStreamKind.ToolExecutionStarted,
-                        Sequence = ++seq,
-                        CorrelationId = session.CorrelationId,
-                        RegistryKey = request.OrchestrationRegistryKey,
-                        ToolName = call.Name,
-                        ToolCall = call
-                    };
+                        yield return new OrchestrationStreamEnvelope
+                        {
+                            Kind = OrchestrationStreamKind.ToolExecutionStarted,
+                            Sequence = ++seq,
+                            CorrelationId = session.CorrelationId,
+                            RegistryKey = request.OrchestrationRegistryKey,
+                            ToolName = call.Name,
+                            ToolCall = call
+                        };
+                    }
 
-                    var exec = await ExecuteToolAsync(call, roundAllowed, request.OrchestrationRegistryKey, session, cancellationToken)
+                    var execResults = await ExecuteToolGroupAsync(
+                            group, roundAllowed, request, session, round, cancellationToken)
                         .ConfigureAwait(false);
 
-                    yield return new OrchestrationStreamEnvelope
+                    for (var gi = 0; gi < group.Count; gi++)
                     {
-                        Kind = OrchestrationStreamKind.ToolExecutionFinished,
-                        Sequence = ++seq,
-                        CorrelationId = session.CorrelationId,
-                        RegistryKey = request.OrchestrationRegistryKey,
-                        ToolName = call.Name,
-                        ToolResult = exec
-                    };
+                        var call = group[gi];
+                        var exec = execResults[gi];
+                        yield return new OrchestrationStreamEnvelope
+                        {
+                            Kind = OrchestrationStreamKind.ToolExecutionFinished,
+                            Sequence = ++seq,
+                            CorrelationId = session.CorrelationId,
+                            RegistryKey = request.OrchestrationRegistryKey,
+                            ToolName = call.Name,
+                            ToolResult = exec
+                        };
 
-                    var toolBody = exec.StructuredPayloadJson is { Length: > 0 }
-                        ? $"{exec.SummaryText}\n\n{exec.StructuredPayloadJson}"
-                        : exec.SummaryText;
+                        var toolBody = exec.StructuredPayloadJson is { Length: > 0 }
+                            ? $"{exec.SummaryText}\n\n{exec.StructuredPayloadJson}"
+                            : exec.SummaryText;
 
-                    var toolMessage = new ChatMessage
-                    {
-                        Role = ChatRole.Tool,
-                        ToolCallId = call.CallId,
-                        ToolName = call.Name,
-                        Content = toolBody
-                    };
+                        var toolMessage = new ChatMessage
+                        {
+                            Role = ChatRole.Tool,
+                            ToolCallId = call.CallId,
+                            ToolName = call.Name,
+                            Content = toolBody
+                        };
 
-                    prep.Working.Add(toolMessage);
-                    appended.Add(toolMessage);
+                        prep.Working.Add(toolMessage);
+                        appended.Add(toolMessage);
+                    }
                 }
 
                 continue;
@@ -870,11 +896,100 @@ public sealed class LayeredChatOrchestrator
         HashSet<string> AllowedSet,
         IReadOnlyList<ContextSlice> Slices);
 
-    private async Task<ToolExecutionResult> ExecuteToolAsync(
+    /// <summary>
+    /// Folds a <see cref="ResponseSchemaSpec.EmitToolName"/> tool call (produced by
+    /// <see cref="ResponseSchemaMode.ForcedTool"/> connectors) back into assistant text content.
+    /// </summary>
+    private static LlmCompletionResult FoldStructuredEmitToolCall(
+        LlmCompletionResult completion,
+        LlmRequestOptions options)
+    {
+        if (options.ResponseSchema is null || completion.ToolCalls.Count == 0)
+        {
+            return completion;
+        }
+
+        var emit = completion.ToolCalls.FirstOrDefault(c =>
+            string.Equals(c.Name, ResponseSchemaSpec.EmitToolName, StringComparison.OrdinalIgnoreCase));
+        if (emit is null)
+        {
+            return completion;
+        }
+
+        var remaining = completion.ToolCalls.Where(c => !ReferenceEquals(c, emit)).ToList();
+        return new LlmCompletionResult
+        {
+            TextContent = emit.ArgumentsJson,
+            ReasoningContent = completion.ReasoningContent,
+            ToolCalls = remaining,
+            InputTokens = completion.InputTokens,
+            OutputTokens = completion.OutputTokens
+        };
+    }
+
+    /// <summary>
+    /// Partitions one round's tool calls: consecutive <see cref="ToolDefinition.IsReadOnly"/> calls form one
+    /// parallel group; every other call executes alone, in order.
+    /// </summary>
+    private List<List<ToolCallRequest>> GroupToolCallsForExecution(IReadOnlyList<ToolCallRequest> calls)
+    {
+        var groups = new List<List<ToolCallRequest>>();
+        List<ToolCallRequest>? readGroup = null;
+        foreach (var call in calls)
+        {
+            var isReadOnly = _toolCatalog.TryGet(call.Name, out var def) && def is { IsReadOnly: true };
+            if (isReadOnly)
+            {
+                if (readGroup is null)
+                {
+                    readGroup = [];
+                    groups.Add(readGroup);
+                }
+
+                readGroup.Add(call);
+            }
+            else
+            {
+                readGroup = null;
+                groups.Add([call]);
+            }
+        }
+
+        return groups;
+    }
+
+    private async Task<ToolExecutionResult[]> ExecuteToolGroupAsync(
+        IReadOnlyList<ToolCallRequest> group,
+        HashSet<string> allowedSet,
+        LayeredChatTurnRequest request,
+        OrchestrationSessionContext session,
+        int roundIndex,
+        CancellationToken cancellationToken)
+    {
+        var lifecycle = request.Hooks?.ToolLifecycle;
+        var registryKey = request.OrchestrationRegistryKey;
+        if (group.Count == 1)
+        {
+            var single = await ExecuteToolGuardedAsync(
+                    group[0], allowedSet, registryKey, session, lifecycle, roundIndex, cancellationToken)
+                .ConfigureAwait(false);
+            return [single];
+        }
+
+        var tasks = group
+            .Select(call => ExecuteToolGuardedAsync(
+                call, allowedSet, registryKey, session, lifecycle, roundIndex, cancellationToken))
+            .ToArray();
+        return await Task.WhenAll(tasks).ConfigureAwait(false);
+    }
+
+    private async Task<ToolExecutionResult> ExecuteToolGuardedAsync(
         ToolCallRequest call,
         HashSet<string> allowedSet,
         string registryKey,
         OrchestrationSessionContext session,
+        ToolLifecycleHooks? lifecycle,
+        int roundIndex,
         CancellationToken cancellationToken)
     {
         if (!allowedSet.Contains(call.Name))
@@ -882,13 +997,156 @@ public sealed class LayeredChatOrchestrator
             return new ToolExecutionResult
             {
                 Success = false,
+                FailureKind = ToolFailureKind.Invalid,
                 SummaryText = $"Tool '{call.Name}' is not allowed for orchestration '{registryKey}'."
             };
         }
 
-        return await _toolExecutor
-            .ExecuteAsync(call.Name, call.ArgumentsJson, session, cancellationToken)
+        var argumentsJson = call.ArgumentsJson;
+        if (lifecycle?.PreToolUse is { } pre)
+        {
+            PreToolUseDecision decision;
+            try
+            {
+                decision = await pre(new PreToolUseContext
+                {
+                    Call = call,
+                    RegistryKey = registryKey,
+                    Session = session,
+                    RoundIndex = roundIndex
+                }, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                decision = PreToolUseDecision.Deny($"PreToolUse hook failed: {ex.Message}");
+            }
+
+            if (decision.Action == PreToolUseAction.Deny)
+            {
+                var denied = new ToolExecutionResult
+                {
+                    Success = false,
+                    FailureKind = ToolFailureKind.Invalid,
+                    SummaryText = $"Tool '{call.Name}' was denied: {decision.DeniedReason ?? "no reason provided"}."
+                };
+                await InvokeFailureHookAsync(lifecycle, call, denied, registryKey, session, null, cancellationToken)
+                    .ConfigureAwait(false);
+                return denied;
+            }
+
+            if (decision.Action == PreToolUseAction.RewriteArguments &&
+                decision.RewrittenArgumentsJson is { Length: > 0 })
+            {
+                argumentsJson = decision.RewrittenArgumentsJson;
+            }
+        }
+
+        var (result, exception) = await ExecuteToolCoreAsync(call.Name, argumentsJson, session, cancellationToken)
             .ConfigureAwait(false);
+        if (result.FailureKind == ToolFailureKind.Transient)
+        {
+            (result, exception) = await ExecuteToolCoreAsync(call.Name, argumentsJson, session, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        if (result.Success)
+        {
+            if (lifecycle?.PostToolUse is { } post)
+            {
+                try
+                {
+                    await post(new PostToolUseContext
+                    {
+                        Call = call,
+                        Result = result,
+                        RegistryKey = registryKey,
+                        Session = session
+                    }, cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch
+                {
+                    // Observability hooks must not fail the turn.
+                }
+            }
+        }
+        else
+        {
+            await InvokeFailureHookAsync(lifecycle, call, result, registryKey, session, exception, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        return result;
+    }
+
+    private async Task<(ToolExecutionResult Result, Exception? Exception)> ExecuteToolCoreAsync(
+        string toolName,
+        string argumentsJson,
+        OrchestrationSessionContext session,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _toolExecutor
+                .ExecuteAsync(toolName, argumentsJson, session, cancellationToken)
+                .ConfigureAwait(false);
+            return (result, null);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return (new ToolExecutionResult
+            {
+                Success = false,
+                FailureKind = ToolFailureKind.Fatal,
+                SummaryText = $"Tool '{toolName}' failed: {ex.GetType().Name}: {ex.Message}"
+            }, ex);
+        }
+    }
+
+    private static async Task InvokeFailureHookAsync(
+        ToolLifecycleHooks? lifecycle,
+        ToolCallRequest call,
+        ToolExecutionResult result,
+        string registryKey,
+        OrchestrationSessionContext session,
+        Exception? exception,
+        CancellationToken cancellationToken)
+    {
+        if (lifecycle?.PostToolUseFailure is not { } failureHook)
+        {
+            return;
+        }
+
+        try
+        {
+            await failureHook(new PostToolUseFailureContext
+            {
+                Call = call,
+                Result = result,
+                RegistryKey = registryKey,
+                Session = session,
+                Exception = exception
+            }, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            // Observability hooks must not fail the turn.
+        }
     }
 
     private static LlmRequestOptions BuildConnectorOptions(
@@ -904,6 +1162,7 @@ public sealed class LayeredChatOrchestrator
             MaxToolRoundIterations = c?.MaxToolRoundIterations,
             ModelNameOverride = c?.ModelNameOverride,
             AdapterProfile = adapter,
+            ResponseSchema = c?.ResponseSchema,
             TelemetryVerbosity = c?.TelemetryVerbosity ?? OrchestrationTelemetryVerbosity.Normal
         };
     }
@@ -923,6 +1182,8 @@ public sealed class LayeredChatOrchestrator
             ProfileId = manifest.LlmAdapterProfileId ?? r?.ProfileId ?? "default",
             SupportsStreaming = r?.SupportsStreaming ?? true,
             SupportsParallelToolCalls = r?.SupportsParallelToolCalls ?? true,
+            SupportsNativeJsonSchema = r?.SupportsNativeJsonSchema ?? true,
+            SupportsForcedToolChoice = r?.SupportsForcedToolChoice ?? true,
             DefaultMaxOutputTokens = r?.DefaultMaxOutputTokens,
             ReasoningEffortHint = r?.ReasoningEffortHint
         };

@@ -349,6 +349,18 @@ public sealed class AnthropicNativeChatConnector : IStreamingLlmChatConnector
             ["stream"] = stream
         };
 
+        var schemaMode = options.ResponseSchema?.ResolveMode(
+            options.AdapterProfile, ResponseSchemaMode.ForcedTool);
+        if (options.ResponseSchema is { } promptedSchema && schemaMode == ResponseSchemaMode.PromptedJson)
+        {
+            var instruction = "Respond ONLY with a single JSON object conforming to this JSON Schema. " +
+                              "No markdown fences, no prose before or after.\n" +
+                              promptedSchema.SchemaJson;
+            systemPrompt = string.IsNullOrEmpty(systemPrompt)
+                ? instruction
+                : systemPrompt + "\n\n" + instruction;
+        }
+
         if (!string.IsNullOrEmpty(systemPrompt))
         {
             body["system"] = systemPrompt;
@@ -359,20 +371,41 @@ public sealed class AnthropicNativeChatConnector : IStreamingLlmChatConnector
             body["temperature"] = options.Temperature;
         }
 
-        if (tools.Count > 0)
+        var toolObjs = new List<object>(tools.Count + 1);
+        foreach (var t in tools)
         {
-            var toolObjs = new List<object>(tools.Count);
-            foreach (var t in tools)
+            var inputSchema = t.ResolveParametersElement();
+            toolObjs.Add(new Dictionary<string, object?>
             {
-                var inputSchema = t.ResolveParametersElement();
-                toolObjs.Add(new Dictionary<string, object?>
-                {
-                    ["name"] = t.Name,
-                    ["description"] = t.Description,
-                    ["input_schema"] = inputSchema
-                });
-            }
+                ["name"] = t.Name,
+                ["description"] = t.Description,
+                ["input_schema"] = inputSchema
+            });
+        }
 
+        if (options.ResponseSchema is { } schema &&
+            schemaMode is ResponseSchemaMode.ForcedTool or ResponseSchemaMode.NativeJsonSchema)
+        {
+            toolObjs.Add(new Dictionary<string, object?>
+            {
+                ["name"] = ResponseSchemaSpec.EmitToolName,
+                ["description"] = "Emit the final answer conforming to the required schema. " +
+                                  "Call this exactly once when the task is complete.",
+                ["input_schema"] = schema.ResolveSchemaElement()
+            });
+
+            if (tools.Count == 0)
+            {
+                body["tool_choice"] = new Dictionary<string, object?>
+                {
+                    ["type"] = "tool",
+                    ["name"] = ResponseSchemaSpec.EmitToolName
+                };
+            }
+        }
+
+        if (toolObjs.Count > 0)
+        {
             body["tools"] = toolObjs;
         }
 

@@ -30,7 +30,8 @@ public sealed class DictionaryToolCatalog : IToolCatalog
             Name = t.Name,
             Description = t.Description,
             ParametersSchemaJson = t.ParametersSchemaJson,
-            ParametersSchema = doc.RootElement.Clone()
+            ParametersSchema = doc.RootElement.Clone(),
+            IsReadOnly = t.IsReadOnly
         };
     }
 
