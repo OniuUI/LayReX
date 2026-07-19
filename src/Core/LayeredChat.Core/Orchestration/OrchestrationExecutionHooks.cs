@@ -18,4 +18,9 @@ public sealed class OrchestrationExecutionHooks
     /// Optional evaluation after an assistant message with no tool calls; see <see cref="ITurnContinuationEvaluator"/>.
     /// </summary>
     public ITurnContinuationEvaluator? TurnContinuationEvaluator { get; init; }
+
+    /// <summary>
+    /// Optional per-tool-call lifecycle hooks (permission gating, audit, argument rewriting, failure capture).
+    /// </summary>
+    public ToolLifecycleHooks? ToolLifecycle { get; init; }
 }

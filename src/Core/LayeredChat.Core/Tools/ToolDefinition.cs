@@ -26,6 +26,11 @@ public sealed class ToolDefinition
     public JsonElement? ParametersSchema { get; init; }
 
     /// <summary>
+    /// Marks the tool as side-effect free. Consecutive read-only calls in one model round are executed in parallel.
+    /// </summary>
+    public bool IsReadOnly { get; init; }
+
+    /// <summary>
     /// Returns <see cref="ParametersSchema"/> when set; otherwise parses <see cref="ParametersSchemaJson"/> once per distinct string (shared cache).
     /// </summary>
     public JsonElement ResolveParametersElement()

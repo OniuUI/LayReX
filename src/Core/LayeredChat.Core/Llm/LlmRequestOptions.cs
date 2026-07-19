@@ -20,6 +20,13 @@ public sealed class LlmRequestOptions
     public LlmModelAdapterProfile? AdapterProfile { get; init; }
 
     /// <summary>
+    /// When set, the model's final answer is schema-constrained. Connectors map this to the strongest
+    /// mechanism the provider supports; the orchestrator folds <see cref="ResponseSchemaSpec.EmitToolName"/>
+    /// tool calls back into text content.
+    /// </summary>
+    public ResponseSchemaSpec? ResponseSchema { get; init; }
+
+    /// <summary>
     /// Orchestrator stream envelope volume when <see cref="LayeredChatTurnRequest.Hooks"/> telemetry is attached.
     /// </summary>
     public OrchestrationTelemetryVerbosity TelemetryVerbosity { get; init; } = OrchestrationTelemetryVerbosity.Normal;

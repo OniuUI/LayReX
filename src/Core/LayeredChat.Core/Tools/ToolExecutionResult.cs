@@ -7,6 +7,11 @@ public sealed class ToolExecutionResult
 {
     public bool Success { get; init; } = true;
 
+    /// <summary>
+    /// Classifies failures; <see cref="ToolFailureKind.Transient"/> triggers one silent orchestrator retry.
+    /// </summary>
+    public ToolFailureKind FailureKind { get; init; } = ToolFailureKind.None;
+
     public string SummaryText { get; init; } = string.Empty;
 
     /// <summary>
