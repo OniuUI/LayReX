@@ -13,6 +13,7 @@ public static class OrchestrationForwardMapping
             PriorMessages = request.PriorMessages.Select(ToChatMessageDto).ToList(),
             UserMessageContent = request.UserMessageContent,
             SystemInstructionText = request.SystemInstructionText,
+            CachedSystemInstructionPrefix = request.CachedSystemInstructionPrefix,
             Session = ToDto(request.Session),
             ConnectorOptions = request.ConnectorOptions is null
                 ? null
@@ -22,7 +23,8 @@ public static class OrchestrationForwardMapping
                     MaxOutputTokens = request.ConnectorOptions.MaxOutputTokens,
                     MaxToolRoundIterations = request.ConnectorOptions.MaxToolRoundIterations,
                     ModelNameOverride = request.ConnectorOptions.ModelNameOverride,
-                    TelemetryVerbosity = request.ConnectorOptions.TelemetryVerbosity
+                    TelemetryVerbosity = request.ConnectorOptions.TelemetryVerbosity,
+                    EnablePromptCache = request.ConnectorOptions.EnablePromptCache
                 }
         };
     }
@@ -35,6 +37,7 @@ public static class OrchestrationForwardMapping
             PriorMessages = dto.PriorMessages.Select(FromChatMessageDto).ToList(),
             UserMessageContent = dto.UserMessageContent,
             SystemInstructionText = dto.SystemInstructionText,
+            CachedSystemInstructionPrefix = dto.CachedSystemInstructionPrefix,
             Session = FromDto(dto.Session),
             ConnectorOptions = dto.ConnectorOptions is null
                 ? null
@@ -44,7 +47,8 @@ public static class OrchestrationForwardMapping
                     MaxOutputTokens = dto.ConnectorOptions.MaxOutputTokens,
                     MaxToolRoundIterations = dto.ConnectorOptions.MaxToolRoundIterations,
                     ModelNameOverride = dto.ConnectorOptions.ModelNameOverride,
-                    TelemetryVerbosity = dto.ConnectorOptions.TelemetryVerbosity
+                    TelemetryVerbosity = dto.ConnectorOptions.TelemetryVerbosity,
+                    EnablePromptCache = dto.ConnectorOptions.EnablePromptCache
                 }
         };
     }
@@ -63,7 +67,8 @@ public static class OrchestrationForwardMapping
                 CallId = tc.CallId,
                 Name = tc.Name,
                 ArgumentsJson = tc.ArgumentsJson
-            }).ToList()
+            }).ToList(),
+            IsError = m.IsError
         };
     }
 
@@ -81,7 +86,8 @@ public static class OrchestrationForwardMapping
                 CallId = tc.CallId,
                 Name = tc.Name,
                 ArgumentsJson = tc.ArgumentsJson
-            }).ToList()
+            }).ToList(),
+            IsError = dto.IsError
         };
     }
 

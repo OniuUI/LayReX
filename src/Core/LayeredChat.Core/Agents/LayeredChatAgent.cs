@@ -44,6 +44,7 @@ public sealed class LayeredChatAgent : IChatAgent
             PriorMessages = input.PriorMessages,
             UserMessageContent = input.UserMessageContent,
             SystemInstructionText = input.SystemInstructionText,
+            CachedSystemInstructionPrefix = input.CachedSystemInstructionPrefix,
             Session = input.Session,
             ConnectorOptions = input.ConnectorOptions,
             Hooks = input.Hooks,

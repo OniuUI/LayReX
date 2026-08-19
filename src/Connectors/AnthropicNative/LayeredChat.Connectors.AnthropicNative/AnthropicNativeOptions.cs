@@ -11,4 +11,10 @@ public sealed class AnthropicNativeOptions
     public string AnthropicVersion { get; init; } = "2023-06-01";
 
     public string MessagesPath { get; init; } = "v1/messages";
+
+    /// <summary>
+    /// When true, requests include Anthropic <c>cache_control</c> on the first system block and the last tool.
+    /// Per-request <see cref="LlmRequestOptions.EnablePromptCache"/> also enables this.
+    /// </summary>
+    public bool EnablePromptCache { get; init; }
 }

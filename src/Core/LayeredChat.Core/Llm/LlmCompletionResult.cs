@@ -14,4 +14,10 @@ public sealed class LlmCompletionResult
     public int InputTokens { get; init; }
 
     public int OutputTokens { get; init; }
+
+    /// <summary>Anthropic <c>cache_creation_input_tokens</c> when the provider reports them.</summary>
+    public int CacheCreationInputTokens { get; init; }
+
+    /// <summary>Anthropic <c>cache_read_input_tokens</c> when the provider reports them.</summary>
+    public int CacheReadInputTokens { get; init; }
 }
