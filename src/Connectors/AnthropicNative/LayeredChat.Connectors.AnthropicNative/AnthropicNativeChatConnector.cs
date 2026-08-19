@@ -336,10 +336,16 @@ public sealed class AnthropicNativeChatConnector : IStreamingLlmChatConnector
 
                 case ChatRole.Tool:
                 {
+                    if (string.IsNullOrWhiteSpace(m.ToolCallId))
+                    {
+                        throw new InvalidOperationException(
+                            "Anthropic tool_result requires a non-empty tool_use_id that matches a prior tool_use.");
+                    }
+
                     var toolResult = new Dictionary<string, object?>
                     {
                         ["type"] = "tool_result",
-                        ["tool_use_id"] = m.ToolCallId ?? string.Empty,
+                        ["tool_use_id"] = m.ToolCallId,
                         ["content"] = m.Content ?? string.Empty
                     };
                     if (m.IsError)

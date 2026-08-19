@@ -108,6 +108,27 @@ public sealed class AnthropicNativeChatConnectorCacheTests
         Assert.True(content.GetProperty("is_error").GetBoolean());
     }
 
+    [Fact]
+    public async Task CompleteAsync_ToolResultWithoutToolCallId_Throws()
+    {
+        var handler = new CaptureHandler();
+        var httpClient = new HttpClient(handler);
+        var sut = new AnthropicNativeChatConnector(httpClient, new AnthropicNativeOptions
+        {
+            BaseUri = new Uri("https://example.com"),
+            Model = "claude-sonnet-4-20250514"
+        });
+        var messages = new[]
+        {
+            new ChatMessage { Role = ChatRole.User, Content = "go" },
+            new ChatMessage { Role = ChatRole.Tool, Content = "missing id" }
+        };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            sut.CompleteAsync(messages, [], new LlmRequestOptions { MaxOutputTokens = 32 }));
+        Assert.Equal(string.Empty, handler.LastRequestBody);
+    }
+
     private sealed class CaptureHandler : HttpMessageHandler
     {
         public string LastRequestBody { get; private set; } = string.Empty;
