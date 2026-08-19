@@ -32,7 +32,7 @@ public sealed class AnthropicNativeChatConnector : IStreamingLlmChatConnector
         CancellationToken cancellationToken = default)
     {
         var model = options.ModelNameOverride ?? _options.Model;
-        var body = BuildRequestBody(model, messages, tools, options, stream: false);
+        var body = BuildRequestBody(model, messages, tools, options, stream: false, enablePromptCache: PromptCacheEnabled(options));
         using var request = new HttpRequestMessage(HttpMethod.Post, BuildUri());
         request.Content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json");
         AddAuth(request);
@@ -51,7 +51,7 @@ public sealed class AnthropicNativeChatConnector : IStreamingLlmChatConnector
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var model = options.ModelNameOverride ?? _options.Model;
-        var body = BuildRequestBody(model, messages, tools, options, stream: true);
+        var body = BuildRequestBody(model, messages, tools, options, stream: true, enablePromptCache: PromptCacheEnabled(options));
         using var request = new HttpRequestMessage(HttpMethod.Post, BuildUri());
         request.Content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json");
         AddAuth(request);
@@ -73,6 +73,8 @@ public sealed class AnthropicNativeChatConnector : IStreamingLlmChatConnector
         var toolCallNames = new Dictionary<int, string>();
         var inputTokens = 0;
         var outputTokens = 0;
+        var cacheCreationTokens = 0;
+        var cacheReadTokens = 0;
 
         while (!reader.EndOfStream)
         {
@@ -117,15 +119,16 @@ public sealed class AnthropicNativeChatConnector : IStreamingLlmChatConnector
                     {
                         case "message_start":
                             if (root.TryGetProperty("message", out var msg) &&
-                                msg.TryGetProperty("usage", out var usageStart) &&
-                                usageStart.TryGetProperty("input_tokens", out var itStart))
+                                msg.TryGetProperty("usage", out var usageStart))
                             {
-                                inputTokens = itStart.GetInt32();
+                                ReadTokenUsage(usageStart, out inputTokens, out _, out cacheCreationTokens, out cacheReadTokens);
                                 yield return new LlmStreamFrame
                                 {
                                     Kind = LlmStreamFrameKind.Usage,
                                     InputTokens = inputTokens,
-                                    OutputTokens = null
+                                    OutputTokens = null,
+                                    CacheCreationInputTokens = cacheCreationTokens,
+                                    CacheReadInputTokens = cacheReadTokens
                                 };
                             }
                             break;
@@ -196,15 +199,20 @@ public sealed class AnthropicNativeChatConnector : IStreamingLlmChatConnector
                             break;
 
                         case "message_delta":
-                            if (root.TryGetProperty("usage", out var usageDelta) &&
-                                usageDelta.TryGetProperty("output_tokens", out var otDelta))
+                            if (root.TryGetProperty("usage", out var usageDelta))
                             {
-                                outputTokens = otDelta.GetInt32();
+                                ReadTokenUsage(usageDelta, out _, out outputTokens, out var deltaCacheCreate, out var deltaCacheRead);
+                                if (deltaCacheCreate > 0)
+                                    cacheCreationTokens = deltaCacheCreate;
+                                if (deltaCacheRead > 0)
+                                    cacheReadTokens = deltaCacheRead;
                                 yield return new LlmStreamFrame
                                 {
                                     Kind = LlmStreamFrameKind.Usage,
                                     InputTokens = inputTokens,
-                                    OutputTokens = outputTokens
+                                    OutputTokens = outputTokens,
+                                    CacheCreationInputTokens = cacheCreationTokens,
+                                    CacheReadInputTokens = cacheReadTokens
                                 };
                             }
                             break;
@@ -236,23 +244,29 @@ public sealed class AnthropicNativeChatConnector : IStreamingLlmChatConnector
         request.Headers.TryAddWithoutValidation("anthropic-version", _options.AnthropicVersion);
     }
 
+    private bool PromptCacheEnabled(LlmRequestOptions options) =>
+        options.EnablePromptCache || _options.EnablePromptCache;
+
+    private static Dictionary<string, object?> CacheControlEphemeral() =>
+        new() { ["type"] = "ephemeral" };
+
     private static object BuildRequestBody(
         string model,
         IReadOnlyList<ChatMessage> messages,
         IReadOnlyList<ToolDefinition> tools,
         LlmRequestOptions options,
-        bool stream)
+        bool stream,
+        bool enablePromptCache)
     {
-        string? systemPrompt = null;
+        var systemParts = new List<string>();
         var anthropicMessages = new List<object>(messages.Count);
 
         foreach (var m in messages)
         {
             if (m.Role == ChatRole.System)
             {
-                systemPrompt = string.IsNullOrEmpty(systemPrompt)
-                    ? m.Content
-                    : systemPrompt + "\n\n" + m.Content;
+                if (!string.IsNullOrEmpty(m.Content))
+                    systemParts.Add(m.Content);
                 continue;
             }
 
@@ -321,20 +335,23 @@ public sealed class AnthropicNativeChatConnector : IStreamingLlmChatConnector
                 }
 
                 case ChatRole.Tool:
+                {
+                    var toolResult = new Dictionary<string, object?>
+                    {
+                        ["type"] = "tool_result",
+                        ["tool_use_id"] = m.ToolCallId ?? string.Empty,
+                        ["content"] = m.Content ?? string.Empty
+                    };
+                    if (m.IsError)
+                        toolResult["is_error"] = true;
+
                     anthropicMessages.Add(new Dictionary<string, object?>
                     {
                         ["role"] = "user",
-                        ["content"] = new[]
-                        {
-                            new Dictionary<string, object?>
-                            {
-                                ["type"] = "tool_result",
-                                ["tool_use_id"] = m.ToolCallId ?? string.Empty,
-                                ["content"] = m.Content ?? string.Empty
-                            }
-                        }
+                        ["content"] = new[] { toolResult }
                     });
                     break;
+                }
 
                 default:
                     throw new ArgumentOutOfRangeException(nameof(messages), m.Role, null);
@@ -356,14 +373,32 @@ public sealed class AnthropicNativeChatConnector : IStreamingLlmChatConnector
             var instruction = "Respond ONLY with a single JSON object conforming to this JSON Schema. " +
                               "No markdown fences, no prose before or after.\n" +
                               promptedSchema.SchemaJson;
-            systemPrompt = string.IsNullOrEmpty(systemPrompt)
-                ? instruction
-                : systemPrompt + "\n\n" + instruction;
+            systemParts.Add(instruction);
         }
 
-        if (!string.IsNullOrEmpty(systemPrompt))
+        if (systemParts.Count > 0)
         {
-            body["system"] = systemPrompt;
+            if (enablePromptCache)
+            {
+                var blocks = new List<object>(systemParts.Count);
+                for (var i = 0; i < systemParts.Count; i++)
+                {
+                    var block = new Dictionary<string, object?>
+                    {
+                        ["type"] = "text",
+                        ["text"] = systemParts[i]
+                    };
+                    if (i == 0)
+                        block["cache_control"] = CacheControlEphemeral();
+                    blocks.Add(block);
+                }
+
+                body["system"] = blocks;
+            }
+            else
+            {
+                body["system"] = string.Join("\n\n", systemParts);
+            }
         }
 
         if (options.Temperature != 0.2)
@@ -404,6 +439,11 @@ public sealed class AnthropicNativeChatConnector : IStreamingLlmChatConnector
             }
         }
 
+        if (enablePromptCache && toolObjs.Count > 0 && toolObjs[^1] is Dictionary<string, object?> lastTool)
+        {
+            lastTool["cache_control"] = CacheControlEphemeral();
+        }
+
         if (toolObjs.Count > 0)
         {
             body["tools"] = toolObjs;
@@ -433,18 +473,12 @@ public sealed class AnthropicNativeChatConnector : IStreamingLlmChatConnector
         var toolCalls = new List<ToolCallRequest>();
         var inputTokens = 0;
         var outputTokens = 0;
+        var cacheCreationTokens = 0;
+        var cacheReadTokens = 0;
 
         if (root.TryGetProperty("usage", out var usage))
         {
-            if (usage.TryGetProperty("input_tokens", out var it))
-            {
-                inputTokens = it.GetInt32();
-            }
-
-            if (usage.TryGetProperty("output_tokens", out var ot))
-            {
-                outputTokens = ot.GetInt32();
-            }
+            ReadTokenUsage(usage, out inputTokens, out outputTokens, out cacheCreationTokens, out cacheReadTokens);
         }
 
         if (root.TryGetProperty("content", out var contentEl) && contentEl.ValueKind == JsonValueKind.Array)
@@ -485,7 +519,32 @@ public sealed class AnthropicNativeChatConnector : IStreamingLlmChatConnector
             TextContent = string.IsNullOrEmpty(text) ? null : text,
             ToolCalls = toolCalls,
             InputTokens = inputTokens,
-            OutputTokens = outputTokens
+            OutputTokens = outputTokens,
+            CacheCreationInputTokens = cacheCreationTokens,
+            CacheReadInputTokens = cacheReadTokens
         };
+    }
+
+    private static void ReadTokenUsage(
+        JsonElement usage,
+        out int inputTokens,
+        out int outputTokens,
+        out int cacheCreationInputTokens,
+        out int cacheReadInputTokens)
+    {
+        inputTokens = usage.TryGetProperty("input_tokens", out var it) && it.ValueKind == JsonValueKind.Number
+            ? it.GetInt32()
+            : 0;
+        outputTokens = usage.TryGetProperty("output_tokens", out var ot) && ot.ValueKind == JsonValueKind.Number
+            ? ot.GetInt32()
+            : 0;
+        cacheCreationInputTokens = usage.TryGetProperty("cache_creation_input_tokens", out var cc)
+            && cc.ValueKind == JsonValueKind.Number
+            ? cc.GetInt32()
+            : 0;
+        cacheReadInputTokens = usage.TryGetProperty("cache_read_input_tokens", out var cr)
+            && cr.ValueKind == JsonValueKind.Number
+            ? cr.GetInt32()
+            : 0;
     }
 }

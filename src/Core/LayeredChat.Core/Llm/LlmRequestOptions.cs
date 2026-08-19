@@ -30,4 +30,10 @@ public sealed class LlmRequestOptions
     /// Orchestrator stream envelope volume when <see cref="LayeredChatTurnRequest.Hooks"/> telemetry is attached.
     /// </summary>
     public OrchestrationTelemetryVerbosity TelemetryVerbosity { get; init; } = OrchestrationTelemetryVerbosity.Normal;
+
+    /// <summary>
+    /// When true, connectors that support provider prompt caching (Anthropic <c>cache_control</c>)
+    /// mark the stable system prefix and the last tool definition as cache breakpoints.
+    /// </summary>
+    public bool EnablePromptCache { get; init; }
 }

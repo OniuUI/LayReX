@@ -21,6 +21,10 @@ public sealed class LayeredChatTurnResult
 
     public int TotalOutputTokens { get; init; }
 
+    public int TotalCacheCreationInputTokens { get; init; }
+
+    public int TotalCacheReadInputTokens { get; init; }
+
     /// <summary>
     /// When a <see cref="ITurnContinuationEvaluator"/> ran on the final assistant round, optional metadata for hosts (also mirrored on stream summary attributes when streaming).
     /// </summary>

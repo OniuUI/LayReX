@@ -16,4 +16,10 @@ public sealed class ChatMessage
     public string? ToolName { get; init; }
 
     public IReadOnlyList<ToolCallRequest>? ToolCalls { get; init; }
+
+    /// <summary>
+    /// When <see cref="Role"/> is <see cref="ChatRole.Tool"/>, connectors map this to the provider tool-error flag
+    /// (Anthropic <c>is_error</c>).
+    /// </summary>
+    public bool IsError { get; init; }
 }

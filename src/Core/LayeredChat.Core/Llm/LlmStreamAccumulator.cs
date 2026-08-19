@@ -12,6 +12,8 @@ public sealed class LlmStreamAccumulatorSession
     private readonly Dictionary<int, ToolAccumulator> _byIndex = new();
     private int _inputTokens;
     private int _outputTokens;
+    private int _cacheCreationTokens;
+    private int _cacheReadTokens;
 
     private sealed class ToolAccumulator
     {
@@ -88,6 +90,16 @@ public sealed class LlmStreamAccumulatorSession
                     _outputTokens = o;
                 }
 
+                if (frame.CacheCreationInputTokens is { } cc)
+                {
+                    _cacheCreationTokens = cc;
+                }
+
+                if (frame.CacheReadInputTokens is { } cr)
+                {
+                    _cacheReadTokens = cr;
+                }
+
                 break;
             case LlmStreamFrameKind.Completed:
                 break;
@@ -122,7 +134,9 @@ public sealed class LlmStreamAccumulatorSession
             ReasoningContent = _reasoning.Length > 0 ? _reasoning.ToString() : null,
             ToolCalls = toolCalls,
             InputTokens = _inputTokens,
-            OutputTokens = _outputTokens
+            OutputTokens = _outputTokens,
+            CacheCreationInputTokens = _cacheCreationTokens,
+            CacheReadInputTokens = _cacheReadTokens
         };
     }
 }

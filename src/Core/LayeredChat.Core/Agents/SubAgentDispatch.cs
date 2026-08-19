@@ -39,6 +39,11 @@ public sealed class SubAgentDispatchOptions
     /// The host maps envelopes to its own wire format (SSE, polling progress, etc.).
     /// </summary>
     public Func<OrchestrationStreamEnvelope, CancellationToken, ValueTask>? StreamChildEnvelope { get; init; }
+
+    /// <summary>
+    /// When true, child turns request Anthropic prompt cache on the specialist system prompt.
+    /// </summary>
+    public bool EnablePromptCache { get; init; }
 }
 
 /// <summary>
@@ -321,13 +326,18 @@ public sealed class SubAgentDispatchToolExecutor : IToolExecutor
             ModelNameOverride = definition.ModelNameOverride ?? baseOptions?.ModelNameOverride,
             AdapterProfile = baseOptions?.AdapterProfile,
             TelemetryVerbosity = baseOptions?.TelemetryVerbosity ?? OrchestrationTelemetryVerbosity.Normal,
-            ResponseSchema = definition.ResultSchema ?? baseOptions?.ResponseSchema
+            ResponseSchema = definition.ResultSchema ?? baseOptions?.ResponseSchema,
+            EnablePromptCache = _options.EnablePromptCache || (baseOptions?.EnablePromptCache ?? false)
         };
+
+        var cacheChildSystem = connectorOptions.EnablePromptCache
+            && !string.IsNullOrWhiteSpace(definition.SystemInstructionText);
 
         return new LayeredChatTurnRequest
         {
             OrchestrationRegistryKey = definition.OrchestrationRegistryKey,
-            SystemInstructionText = definition.SystemInstructionText,
+            CachedSystemInstructionPrefix = cacheChildSystem ? definition.SystemInstructionText : string.Empty,
+            SystemInstructionText = cacheChildSystem ? string.Empty : definition.SystemInstructionText,
             UserMessageContent = userContent,
             Session = childSession,
             ConnectorOptions = connectorOptions,

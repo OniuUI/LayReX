@@ -11,6 +11,8 @@ public sealed class AgentTurnInput
 
     public string SystemInstructionText { get; init; } = string.Empty;
 
+    public string CachedSystemInstructionPrefix { get; init; } = string.Empty;
+
     public OrchestrationSessionContext Session { get; init; } = new();
 
     public LlmRequestOptions? ConnectorOptions { get; init; }

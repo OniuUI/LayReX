@@ -99,6 +99,8 @@ public sealed class LayeredChatOrchestrator
         var appended = new List<ChatMessage>();
         var totalIn = 0;
         var totalOut = 0;
+        var totalCacheCreate = 0;
+        var totalCacheRead = 0;
         var maxIterations = request.ConnectorOptions?.MaxToolRoundIterations ?? manifest.MaxToolIterations;
         if (maxIterations < 1)
         {
@@ -136,6 +138,8 @@ public sealed class LayeredChatOrchestrator
 
             totalIn += completion.InputTokens;
             totalOut += completion.OutputTokens;
+            totalCacheCreate += completion.CacheCreationInputTokens;
+            totalCacheRead += completion.CacheReadInputTokens;
 
             if (detailed)
             {
@@ -250,7 +254,8 @@ public sealed class LayeredChatOrchestrator
                             Role = ChatRole.Tool,
                             ToolCallId = call.CallId,
                             ToolName = call.Name,
-                            Content = toolBody
+                            Content = toolBody,
+                            IsError = !exec.Success
                         };
 
                         prep.Working.Add(toolMessage);
@@ -319,6 +324,8 @@ public sealed class LayeredChatOrchestrator
             appended,
             totalIn,
             totalOut,
+            totalCacheCreate,
+            totalCacheRead,
             completionEvalMetadata);
 
         await EmitTurnSummaryAsync(telemetry, session, request, manifest, result, ++seq, cancellationToken)
@@ -393,6 +400,8 @@ public sealed class LayeredChatOrchestrator
         var appended = new List<ChatMessage>();
         var totalIn = 0;
         var totalOut = 0;
+        var totalCacheCreate = 0;
+        var totalCacheRead = 0;
         var maxIterations = request.ConnectorOptions?.MaxToolRoundIterations ?? manifest.MaxToolIterations;
         if (maxIterations < 1)
         {
@@ -474,6 +483,8 @@ public sealed class LayeredChatOrchestrator
 
             totalIn += completion.InputTokens;
             totalOut += completion.OutputTokens;
+            totalCacheCreate += completion.CacheCreationInputTokens;
+            totalCacheRead += completion.CacheReadInputTokens;
             completion = FoldStructuredEmitToolCall(completion, options);
 
             if (detailed)
@@ -589,7 +600,8 @@ public sealed class LayeredChatOrchestrator
                             Role = ChatRole.Tool,
                             ToolCallId = call.CallId,
                             ToolName = call.Name,
-                            Content = toolBody
+                            Content = toolBody,
+                            IsError = !exec.Success
                         };
 
                         prep.Working.Add(toolMessage);
@@ -658,6 +670,8 @@ public sealed class LayeredChatOrchestrator
             appended,
             totalIn,
             totalOut,
+            totalCacheCreate,
+            totalCacheRead,
             completionEvalMetadata);
         yield return SummaryEnvelope(++seq, session, request, manifest, result);
         yield return Envelope(++seq, OrchestrationStreamKind.TurnCompleted, session, request, manifest, null);
@@ -675,6 +689,8 @@ public sealed class LayeredChatOrchestrator
             ["assistantText"] = result.AssistantText ?? string.Empty,
             ["totalInputTokens"] = result.TotalInputTokens.ToString(),
             ["totalOutputTokens"] = result.TotalOutputTokens.ToString(),
+            ["totalCacheCreationInputTokens"] = result.TotalCacheCreationInputTokens.ToString(),
+            ["totalCacheReadInputTokens"] = result.TotalCacheReadInputTokens.ToString(),
             ["appendedCount"] = result.AppendedMessages.Count.ToString()
         };
         if (result.CompletionEvaluationMetadata is { Count: > 0 } meta)
@@ -867,14 +883,31 @@ public sealed class LayeredChatOrchestrator
         var allowedSet = new HashSet<string>(manifest.AllowedToolNames, StringComparer.Ordinal);
         var tools = _toolCatalog.ResolveAllowed(manifest.AllowedToolNames);
 
-        var working = new List<ChatMessage>
+        var working = new List<ChatMessage>();
+        if (!string.IsNullOrWhiteSpace(request.CachedSystemInstructionPrefix))
         {
-            new()
+            working.Add(new ChatMessage
+            {
+                Role = ChatRole.System,
+                Content = request.CachedSystemInstructionPrefix
+            });
+            if (!string.IsNullOrWhiteSpace(mergedSystem))
+            {
+                working.Add(new ChatMessage
+                {
+                    Role = ChatRole.System,
+                    Content = mergedSystem
+                });
+            }
+        }
+        else
+        {
+            working.Add(new ChatMessage
             {
                 Role = ChatRole.System,
                 Content = mergedSystem
-            }
-        };
+            });
+        }
 
         working.AddRange(request.PriorMessages);
         working.Add(new ChatMessage
@@ -923,7 +956,9 @@ public sealed class LayeredChatOrchestrator
             ReasoningContent = completion.ReasoningContent,
             ToolCalls = remaining,
             InputTokens = completion.InputTokens,
-            OutputTokens = completion.OutputTokens
+            OutputTokens = completion.OutputTokens,
+            CacheCreationInputTokens = completion.CacheCreationInputTokens,
+            CacheReadInputTokens = completion.CacheReadInputTokens
         };
     }
 
@@ -1163,7 +1198,8 @@ public sealed class LayeredChatOrchestrator
             ModelNameOverride = c?.ModelNameOverride,
             AdapterProfile = adapter,
             ResponseSchema = c?.ResponseSchema,
-            TelemetryVerbosity = c?.TelemetryVerbosity ?? OrchestrationTelemetryVerbosity.Normal
+            TelemetryVerbosity = c?.TelemetryVerbosity ?? OrchestrationTelemetryVerbosity.Normal,
+            EnablePromptCache = c?.EnablePromptCache ?? false
         };
     }
 
@@ -1197,6 +1233,8 @@ public sealed class LayeredChatOrchestrator
         List<ChatMessage> appended,
         int totalIn,
         int totalOut,
+        int totalCacheCreate,
+        int totalCacheRead,
         IReadOnlyDictionary<string, string>? completionEvaluationMetadata = null)
     {
         return new LayeredChatTurnResult
@@ -1209,6 +1247,8 @@ public sealed class LayeredChatOrchestrator
             AppendedMessages = appended,
             TotalInputTokens = totalIn,
             TotalOutputTokens = totalOut,
+            TotalCacheCreationInputTokens = totalCacheCreate,
+            TotalCacheReadInputTokens = totalCacheRead,
             CompletionEvaluationMetadata = completionEvaluationMetadata
         };
     }

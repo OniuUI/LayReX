@@ -27,6 +27,8 @@ public sealed class LayeredChatTurnRequestDto
 
     public string SystemInstructionText { get; init; } = string.Empty;
 
+    public string CachedSystemInstructionPrefix { get; init; } = string.Empty;
+
     public OrchestrationSessionContextDto Session { get; init; } = new();
 
     public LlmRequestOptionsDto? ConnectorOptions { get; init; }
@@ -46,6 +48,9 @@ public sealed class ChatMessageDto
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public IReadOnlyList<ToolCallRequestDto>? ToolCalls { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool IsError { get; init; }
 }
 
 public sealed class ToolCallRequestDto
@@ -86,4 +91,6 @@ public sealed class LlmRequestOptionsDto
     public string? ModelNameOverride { get; init; }
 
     public OrchestrationTelemetryVerbosity TelemetryVerbosity { get; init; } = OrchestrationTelemetryVerbosity.Normal;
+
+    public bool EnablePromptCache { get; init; }
 }
